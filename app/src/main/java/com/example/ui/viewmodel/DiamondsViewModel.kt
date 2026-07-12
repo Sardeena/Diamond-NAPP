@@ -39,7 +39,7 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
     }
     
     // Auth State
-    val isLoggedIn = MutableStateFlow(true) // Start logged in for seamless preview experience
+    val isLoggedIn = MutableStateFlow(false) // Prompt auth screens on launch as per security guidelines
     val loggedInUser = MutableStateFlow<Staff?>(null)
     val loginCompanyCode = MutableStateFlow("DIAMOND_EXCLUSIVE_YACHTS")
 
@@ -322,8 +322,7 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
                     repository.insertBooking(b2)
                     repository.insertBooking(b3)
 
-                    // Select default logged in user
-                    loggedInUser.value = captain
+                    // Ready for authentication
                 }
             }
         }
@@ -654,7 +653,82 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
             addSecurityLog("PROFILE_UPDATE", "User profile and security attributes updated for ${updatedStaff.name}.")
         }
     }
+
+    // Support Ticket System
+    private val _supportTickets = MutableStateFlow<List<SupportTicket>>(
+        listOf(
+            SupportTicket(
+                id = 1,
+                title = "Yacht 3 Local WLAN Sync Issue",
+                description = "WLAN router in primary guest saloon is dropping connection to check-in tablets. Needs manual firmware sync.",
+                priority = "Medium",
+                status = "Resolved",
+                timestamp = "2026-07-11 14:30",
+                category = "IT Support"
+            ),
+            SupportTicket(
+                id = 2,
+                title = "Starboard Fender Wear on Yacht 'Diamond Queen'",
+                description = "Severe abrasion noticed during docking at Amalfi port. Need a spare pneumatic fender replacement before tomorrow's VIP charter.",
+                priority = "High",
+                status = "Processing",
+                timestamp = "2026-07-11 18:15",
+                category = "Vessel Maintenance"
+            )
+        )
+    )
+    val supportTickets = _supportTickets.asStateFlow()
+
+    fun createSupportTicket(title: String, description: String, priority: String, category: String) {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val dateStr = sdf.format(Date())
+        val newId = (_supportTickets.value.maxOfOrNull { it.id } ?: 0) + 1
+        val ticket = SupportTicket(
+            id = newId,
+            title = title,
+            description = description,
+            priority = priority,
+            status = "Open",
+            timestamp = dateStr,
+            category = category
+        )
+        _supportTickets.value = listOf(ticket) + _supportTickets.value
+        addSecurityLog("SUPPORT_TICKET_CREATED", "Support Ticket #$newId ('$title') filed by operator.")
+    }
+
+    // Supabase Sync Integration
+    private val supabaseService = SupabaseService()
+    val isSyncing = MutableStateFlow(false)
+    val supabaseSyncReport = MutableStateFlow<SyncReport?>(null)
+
+    fun isSupabaseConfigured(): Boolean {
+        return supabaseService.isConfigured()
+    }
+
+    fun syncDataWithSupabase() {
+        viewModelScope.launch {
+            isSyncing.value = true
+            supabaseSyncReport.value = null
+            addSecurityLog("SUPABASE_SYNC_START", "Initiating master node synchronization sequence to remote database.")
+
+            val result = supabaseService.syncToSupabase(
+                staffList = staff.value,
+                customerList = customers.value,
+                vehicleList = vehicles.value,
+                bookingList = bookings.value
+            )
+
+            supabaseSyncReport.value = result
+            if (result.success) {
+                addSecurityLog("SUPABASE_SYNC_SUCCESS", "All tables synchronized with remote node. UUID schema intact.")
+            } else {
+                addSecurityLog("SUPABASE_SYNC_FAILURE", "Sync completed with status / errors: ${result.message}")
+            }
+            isSyncing.value = false
+        }
+    }
 }
+
 
 data class NotificationItem(
     val id: Int,
@@ -662,4 +736,14 @@ data class NotificationItem(
     val description: String,
     val type: String, // Weather, Booking, Fleet, Staff, Security
     val timestamp: String
+)
+
+data class SupportTicket(
+    val id: Int,
+    val title: String,
+    val description: String,
+    val priority: String, // Low, Medium, High
+    val status: String, // Open, Processing, Resolved
+    val timestamp: String,
+    val category: String // IT Support, Billing, Fleet Management, Customer Inquiry
 )

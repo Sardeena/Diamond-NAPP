@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -46,7 +47,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -100,131 +103,8 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
     if (!isLoggedIn) {
         LoginScreen(viewModel = viewModel)
     } else {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                ModalDrawerSheet(
-                    drawerContainerColor = SlateDarkBg,
-                    drawerContentColor = TextPrimary,
-                    modifier = Modifier.width(320.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(GoldPremium.copy(alpha = 0.15f), Color.Transparent)
-                                )
-                            )
-                            .padding(24.dp)
-                    ) {
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .clip(CircleShape)
-                                        .background(GoldPremium)
-                                        .padding(2.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Default.Diamond,
-                                        contentDescription = "Diamonds VIP Logo",
-                                        tint = SlateDarkBg,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column {
-                                    Text(
-                                        "DIAMONDS",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = GoldPremium,
-                                        letterSpacing = 2.sp
-                                    )
-                                    Text(
-                                        "EXCURSION OPERATOR",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = TextSecondary,
-                                        letterSpacing = 1.sp
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Divider(color = SurfaceGlassElevated)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Active Company ID: ${viewModel.loginCompanyCode.value}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = GoldLight,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    // Drawer Navigation Items
-                    val drawerItems = listOf(
-                        Triple("explore", Icons.Default.Explore, "Explore"),
-                        Triple("bookings", Icons.Default.AirplaneTicket, "Bookings"),
-                        Triple("calendar", Icons.Default.CalendarToday, "Calendar"),
-                        Triple("favorites", Icons.Default.Favorite, "Favorites"),
-                        Triple("profile", Icons.Default.Person, "Profile")
-                    )
-
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                    ) {
-                        items(drawerItems) { (screenKey, icon, label) ->
-                            NavigationDrawerItem(
-                                label = { Text(label, fontWeight = FontWeight.SemiBold) },
-                                selected = currentScreen == screenKey,
-                                onClick = {
-                                    coroutineScope.launch {
-                                        viewModel.currentScreen.value = screenKey
-                                        drawerState.close()
-                                    }
-                                },
-                                icon = { Icon(icon, contentDescription = label) },
-                                colors = NavigationDrawerItemDefaults.colors(
-                                    selectedContainerColor = GoldPremium.copy(alpha = 0.15f),
-                                    selectedIconColor = GoldPremium,
-                                    selectedTextColor = GoldPremium,
-                                    unselectedContainerColor = Color.Transparent,
-                                    unselectedIconColor = TextSecondary,
-                                    unselectedTextColor = TextSecondary
-                                ),
-                                modifier = Modifier.padding(vertical = 2.dp)
-                            )
-                        }
-
-                        item {
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Divider(color = SurfaceGlassElevated)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            NavigationDrawerItem(
-                                label = { Text("Logout Secure Session", color = StatusErrorRed) },
-                                selected = false,
-                                onClick = {
-                                    coroutineScope.launch {
-                                        viewModel.performLogout()
-                                        drawerState.close()
-                                    }
-                                },
-                                icon = { Icon(Icons.Default.Logout, contentDescription = "Logout", tint = StatusErrorRed) },
-                                colors = NavigationDrawerItemDefaults.colors(
-                                    unselectedContainerColor = Color.Transparent,
-                                    unselectedTextColor = StatusErrorRed
-                                )
-                            )
-                        }
-                    }
-                }
-            }
+        Box(
+            modifier = Modifier.fillMaxSize()
         ) {
             var isAdminFabVisible by remember { mutableStateOf(true) }
             val nestedScrollConnection = remember {
@@ -265,11 +145,6 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
                                 )
                             }
                         },
-                        navigationIcon = {
-                            IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
-                                Icon(Icons.Default.Menu, contentDescription = "Menu Drawer", tint = GoldPremium)
-                            }
-                        },
                         actions = {
                             // Weather Indicator
                             Row(
@@ -293,9 +168,94 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
                                     fontWeight = FontWeight.Bold
                                 )
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            IconButton(onClick = { viewModel.currentScreen.value = "settings" }) {
-                                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextSecondary)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            // Profile Round Circle Button
+                            val loggedInUser by viewModel.loggedInUser.collectAsStateWithLifecycle()
+                            val initials = loggedInUser?.name?.split(" ")?.map { it.take(1) }?.joinToString("")?.take(2)?.uppercase() ?: "U"
+                            var showProfileMenu by remember { mutableStateOf(false) }
+
+                            Box {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(GoldPremium)
+                                        .clickable {
+                                            showProfileMenu = true
+                                        }
+                                        .padding(1.5.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .clip(CircleShape)
+                                            .background(SlateDarkBg),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = initials,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = GoldPremium,
+                                            fontFamily = FontFamily.Serif
+                                        )
+                                    }
+                                }
+
+                                DropdownMenu(
+                                    expanded = showProfileMenu,
+                                    onDismissRequest = { showProfileMenu = false },
+                                    modifier = Modifier
+                                        .background(SlateDarkBg)
+                                        .border(1.dp, GoldPremium.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                ) {
+                                    Text(
+                                        text = "VIP PORTAL",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = GoldPremium,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                        letterSpacing = 1.sp
+                                    )
+                                    Divider(color = SurfaceGlassElevated, modifier = Modifier.padding(bottom = 4.dp))
+
+                                    DropdownMenuItem(
+                                        text = { Text("Account Profile", color = TextPrimary, fontWeight = FontWeight.SemiBold) },
+                                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Profile", tint = GoldPremium, modifier = Modifier.size(20.dp)) },
+                                        onClick = {
+                                            viewModel.currentScreen.value = "profile"
+                                            showProfileMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("App Preferences", color = TextPrimary, fontWeight = FontWeight.SemiBold) },
+                                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = "Settings", tint = GoldPremium, modifier = Modifier.size(20.dp)) },
+                                        onClick = {
+                                            viewModel.currentScreen.value = "settings"
+                                            showProfileMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Privacy & Security", color = TextPrimary, fontWeight = FontWeight.SemiBold) },
+                                        leadingIcon = { Icon(Icons.Default.Shield, contentDescription = "Security", tint = GoldPremium, modifier = Modifier.size(20.dp)) },
+                                        onClick = {
+                                            // Redirects to settings for convenience
+                                            viewModel.currentScreen.value = "settings"
+                                            showProfileMenu = false
+                                        }
+                                    )
+
+                                    Divider(color = SurfaceGlassElevated, modifier = Modifier.padding(vertical = 4.dp))
+                                    DropdownMenuItem(
+                                        text = { Text("Secure Disconnect", color = StatusErrorRed, fontWeight = FontWeight.Bold) },
+                                        leadingIcon = { Icon(Icons.Default.Logout, contentDescription = "Logout", tint = StatusErrorRed, modifier = Modifier.size(20.dp)) },
+                                        onClick = {
+                                            viewModel.performLogout()
+                                            showProfileMenu = false
+                                        }
+                                    )
+                                }
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
@@ -312,7 +272,6 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
                         val bottomItems = listOf(
                             Triple("explore", Icons.Default.Explore, "Explore"),
                             Triple("bookings", Icons.Default.AirplaneTicket, "Bookings"),
-                            Triple("calendar", Icons.Default.CalendarToday, "Calendar"),
                             Triple("favorites", Icons.Default.Favorite, "Favorites"),
                             Triple("profile", Icons.Default.Person, "Profile")
                         )
@@ -336,21 +295,21 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
                 },
                 floatingActionButton = {
                     val loggedInUser by viewModel.loggedInUser.collectAsStateWithLifecycle()
-                    val isAdmin = loggedInUser?.role == "Manager" || loggedInUser?.role == "Admin"
+                    val isAdmin = loggedInUser?.role?.equals("Manager", ignoreCase = true) == true || 
+                                  loggedInUser?.role?.equals("Admin", ignoreCase = true) == true
                     val showAddFab = isAdmin && when (currentScreen) {
-                        "bookings", "experiences", "customers", "fleet", "staff" -> true
+                        "experiences", "customers", "fleet", "staff" -> true
                         else -> false
                     }
                     if (showAddFab) {
                         FloatingActionButton(
                             onClick = {
                                 when (currentScreen) {
-                                    "bookings" -> showAddBookingSheet = true
                                     "experiences" -> showAddExperienceDialog = true
                                     "customers" -> showAddCustomerDialog = true
                                     "fleet" -> showAddVehicleDialog = true
                                     "staff" -> showAddStaffDialog = true
-                                    else -> showAddBookingSheet = true
+                                    else -> {}
                                 }
                             },
                             containerColor = GoldPremium,
@@ -451,6 +410,9 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
 fun LoginScreen(viewModel: DiamondsViewModel) {
     val context = LocalContext.current
     var screenMode by remember { mutableStateOf("login") } // login, register, forgot, mfa, legacy
+    val activeTenant by viewModel.loginCompanyCode.collectAsStateWithLifecycle()
+    var showTenantSelector by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
     
     // Login fields
     var email by remember { mutableStateOf("") }
@@ -595,6 +557,66 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
             )
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            // Active Secure Schema Card (Multi-Tenant Lookup Handshake)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.25f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+                    .clickable { showTenantSelector = true }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDone,
+                            contentDescription = "Active Tenant",
+                            tint = GoldPremium,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "ACTIVE SECURE SCHEMA",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                fontSize = 9.sp,
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = activeTenant,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "SWITCH",
+                            color = GoldPremium,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelSmall,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.SwapHoriz,
+                            contentDescription = "Switch Tenant",
+                            tint = GoldPremium,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
 
             // Tab switching indicators
             if (screenMode != "mfa") {
@@ -1546,6 +1568,175 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(top = 4.dp)
                     )
+                }
+            }
+        }
+    }
+
+    if (showTenantSelector) {
+        var subdomainInput by remember { mutableStateOf("") }
+        var isVerifying by remember { mutableStateOf(false) }
+        var verificationError by remember { mutableStateOf("") }
+        var verificationSuccess by remember { mutableStateOf(false) }
+
+        Dialog(onDismissRequest = { if (!isVerifying) showTenantSelector = false }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceGlassElevated),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.3f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Dns,
+                        contentDescription = "DNS Handshake",
+                        tint = GoldPremium,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "TENANT GATEWAY LOOKUP",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldPremium,
+                        letterSpacing = 1.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Verify your corporate tenant subdomain to securely isolate data streams and bind database headers.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (verificationError.isNotEmpty()) {
+                        Text(
+                            text = verificationError,
+                            color = Color(0xFFE57373),
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                    }
+
+                    if (verificationSuccess) {
+                        Text(
+                            text = "✓ SECURE SCHEMA LOCKED",
+                            color = Color(0xFF81C784),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = subdomainInput,
+                        onValueChange = { 
+                            subdomainInput = it
+                            verificationError = ""
+                        },
+                        label = { Text("Corporate Subdomain") },
+                        placeholder = { Text("e.g. exclusive-yachts") },
+                        enabled = !isVerifying && !verificationSuccess,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GoldPremium,
+                            unfocusedBorderColor = SurfaceGlassElevated,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedContainerColor = SurfaceGlass,
+                            unfocusedContainerColor = SurfaceGlass
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Available: exclusive-yachts, amalfi-charters, elite-transfers",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        fontSize = 10.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    if (isVerifying) {
+                        CircularProgressIndicator(color = GoldPremium, modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Querying GET /companies?subdomain=eq...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = { showTenantSelector = false },
+                                enabled = !isVerifying
+                            ) {
+                                Text("CANCEL", color = TextSecondary)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    val domain = subdomainInput.trim().lowercase()
+                                    if (domain.isEmpty()) {
+                                        verificationError = "Subdomain cannot be empty."
+                                        return@Button
+                                    }
+                                    isVerifying = true
+                                    coroutineScope.launch {
+                                        delay(1500) // Simulated latency
+                                        isVerifying = false
+                                        when (domain) {
+                                            "exclusive-yachts", "exclusive" -> {
+                                                viewModel.loginCompanyCode.value = "DIAMOND_EXCLUSIVE_YACHTS"
+                                                viewModel.addSecurityLog("TENANT_HANDSHAKE", "Verified subdomain 'exclusive-yachts'. Schema locked.")
+                                                verificationSuccess = true
+                                                delay(1000)
+                                                showTenantSelector = false
+                                            }
+                                            "amalfi-charters", "amalfi" -> {
+                                                viewModel.loginCompanyCode.value = "AMALFI_VIP_CHARTERS"
+                                                viewModel.addSecurityLog("TENANT_HANDSHAKE", "Verified subdomain 'amalfi-charters'. Schema locked.")
+                                                verificationSuccess = true
+                                                delay(1000)
+                                                showTenantSelector = false
+                                            }
+                                            "elite-transfers", "elite" -> {
+                                                viewModel.loginCompanyCode.value = "ELITE_LUXURY_TRANSFERS"
+                                                viewModel.addSecurityLog("TENANT_HANDSHAKE", "Verified subdomain 'elite-transfers'. Schema locked.")
+                                                verificationSuccess = true
+                                                delay(1000)
+                                                showTenantSelector = false
+                                            }
+                                            else -> {
+                                                verificationError = "No Diamonds network instance matches subdomain '$domain'."
+                                                viewModel.addSecurityLog("TENANT_HANDSHAKE_FAILURE", "Failed domain lookup for '$domain'.")
+                                            }
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("VERIFY DOMAIN", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -3432,35 +3623,66 @@ fun NotificationRow(item: NotificationItem, onDismiss: () -> Unit) {
 // ==========================================
 // 3. BOOKING MANAGEMENT SCREEN
 // ==========================================
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookingsScreen(viewModel: DiamondsViewModel) {
     val bookings by viewModel.bookings.collectAsStateWithLifecycle()
-    var selectedFilter by remember { mutableStateOf("All") } // All, Pending, Confirmed, Checked In, Completed, Paid, Cancelled
+    val staffList by viewModel.staff.collectAsStateWithLifecycle()
+    val vehicleList by viewModel.vehicles.collectAsStateWithLifecycle()
+    val loggedInUser by viewModel.loggedInUser.collectAsStateWithLifecycle()
+    
+    var selectedFilter by remember { mutableStateOf("All") } // All, Upcoming, Completed, Cancelled
     var searchQuery by remember { mutableStateOf("") }
-    var expandedBookingId by remember { mutableStateOf<Int?>(null) }
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
-    val filters = listOf("All", "Pending", "Confirmed", "Paid", "Checked In", "Completed")
+    val filters = listOf("All", "Upcoming", "Completed", "Cancelled")
+
+    // Modals state
+    var activeBoardingPassBooking by remember { mutableStateOf<Booking?>(null) }
+    var activeChatBooking by remember { mutableStateOf<Booking?>(null) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(SlateDarkBg)
             .padding(16.dp)
     ) {
+        // Luxury Header
         Text(
-            "VIP EXCURSION RESERVATIONS",
+            "MY PRIVATE VOYAGES",
             style = MaterialTheme.typography.labelSmall,
             color = TextMuted,
-            letterSpacing = 2.sp
+            letterSpacing = 2.sp,
+            fontWeight = FontWeight.Bold
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "Elite Itinerary",
+            style = MaterialTheme.typography.headlineMedium,
+            color = GoldPremium,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Text(
+            "Manage your boutique reservations, access digital boarding passes, and contact private yacht/helicopter concierge support.",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextSecondary,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
 
         // Search bar
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search by guest name or luxury experience...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+            placeholder = { Text("Search your cruises & excursions...") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = TextSecondary) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextSecondary)
+                    }
+                }
+            },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = GoldPremium,
                 unfocusedBorderColor = SurfaceGlassElevated,
@@ -3469,6 +3691,7 @@ fun BookingsScreen(viewModel: DiamondsViewModel) {
                 focusedTextColor = TextPrimary,
                 unfocusedTextColor = TextPrimary
             ),
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -3484,16 +3707,17 @@ fun BookingsScreen(viewModel: DiamondsViewModel) {
                 val isSelected = selectedFilter == filter
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(if (isSelected) GoldPremium else SurfaceGlass)
+                        .border(1.dp, if (isSelected) GoldPremium else SurfaceGlassElevated, RoundedCornerShape(12.dp))
                         .clickable { selectedFilter = filter }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(
                         filter,
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold,
-                        color = if (isSelected) SlateDarkBg else TextSecondary
+                        color = if (isSelected) Color.White else TextSecondary
                     )
                 }
             }
@@ -3501,234 +3725,737 @@ fun BookingsScreen(viewModel: DiamondsViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // List
+        // Filter logic
         val filteredList = bookings.filter { booking ->
-            val matchesFilter = selectedFilter == "All" || booking.status.equals(selectedFilter, ignoreCase = true)
-            val matchesQuery = booking.customerName.contains(searchQuery, ignoreCase = true) ||
-                    booking.experienceTitle.contains(searchQuery, ignoreCase = true)
-            matchesFilter && matchesQuery
+            val matchesQuery = booking.experienceTitle.contains(searchQuery, ignoreCase = true) ||
+                               booking.customerName.contains(searchQuery, ignoreCase = true)
+            
+            val matchesFilter = when (selectedFilter) {
+                "All" -> true
+                "Upcoming" -> booking.status in listOf("Pending", "Confirmed", "Paid", "Checked In")
+                "Completed" -> booking.status == "Completed"
+                "Cancelled" -> booking.status == "Cancelled"
+                else -> true
+            }
+
+            // In user-side mode, non-managers (e.g. Captain, Guide, Driver) only see their assigned bookings
+            val isUserOnly = loggedInUser?.role?.equals("Manager", ignoreCase = true) == false && 
+                             loggedInUser?.role?.equals("Admin", ignoreCase = true) == false
+            val matchesUser = if (isUserOnly) {
+                booking.staffId == (loggedInUser?.id ?: -1)
+            } else {
+                true // Administrators can see all bookings
+            }
+            
+            matchesQuery && matchesFilter && matchesUser
         }
 
         if (filteredList.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Inbox, contentDescription = "Empty", tint = TextMuted, modifier = Modifier.size(64.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("No Matching Excursions Registered", color = TextSecondary, fontWeight = FontWeight.Bold)
-                    Text("Register a booking via the golden FAB.", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 50.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .background(GoldLight.copy(alpha = 0.4f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Inbox,
+                            contentDescription = "Empty",
+                            tint = GoldPremium,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Your Itinerary is Clear",
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "You don't have any excursions booked in this category yet. Begin your exclusive Amalfi adventure today.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = { viewModel.currentScreen.value = "explore" },
+                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Explore, contentDescription = "Explore", modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Explore Amalfi Cruises", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
                 items(filteredList, key = { it.id }) { booking ->
-                    val isExpanded = expandedBookingId == booking.id
-                    val dismissState = rememberSwipeToDismissBoxState(
-                        confirmValueChange = { dismissValue ->
-                            when (dismissValue) {
-                                SwipeToDismissBoxValue.StartToEnd -> {
-                                    if (booking.status != "Confirmed") {
-                                        viewModel.updateBookingStatus(booking.id, "Confirmed")
-                                        Toast.makeText(context, "Confirmed booking for ${booking.customerName}", Toast.LENGTH_SHORT).show()
-                                    }
-                                    false
-                                }
-                                SwipeToDismissBoxValue.EndToStart -> {
-                                    if (booking.status != "Cancelled") {
-                                        viewModel.updateBookingStatus(booking.id, "Cancelled")
-                                        Toast.makeText(context, "Cancelled booking for ${booking.customerName}", Toast.LENGTH_SHORT).show()
-                                    }
-                                    false
-                                }
-                                else -> false
-                            }
-                        }
-                    )
-                    SwipeToDismissBox(
-                        state = dismissState,
-                        modifier = Modifier.padding(vertical = 4.dp),
-                        backgroundContent = {
-                            val color = when (dismissState.dismissDirection) {
-                                SwipeToDismissBoxValue.StartToEnd -> Color(0xFF10B981).copy(alpha = 0.2f)
-                                SwipeToDismissBoxValue.EndToStart -> Color(0xFFEF4444).copy(alpha = 0.2f)
-                                else -> Color.Transparent
-                            }
-                            val alignment = when (dismissState.dismissDirection) {
-                                SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
-                                SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
-                                else -> Alignment.Center
-                            }
-                            val icon = when (dismissState.dismissDirection) {
-                                SwipeToDismissBoxValue.StartToEnd -> Icons.Default.CheckCircle
-                                SwipeToDismissBoxValue.EndToStart -> Icons.Default.Cancel
-                                else -> Icons.Default.CheckCircle
-                            }
-                            val iconColor = when (dismissState.dismissDirection) {
-                                SwipeToDismissBoxValue.StartToEnd -> Color(0xFF10B981)
-                                SwipeToDismissBoxValue.EndToStart -> Color(0xFFEF4444)
-                                else -> Color.Gray
-                            }
-                            val label = when (dismissState.dismissDirection) {
-                                SwipeToDismissBoxValue.StartToEnd -> "Confirm"
-                                SwipeToDismissBoxValue.EndToStart -> "Cancel"
-                                else -> ""
-                            }
+                    val assignedStaff = staffList.find { it.id == booking.staffId }
+                    val assignedVehicle = vehicleList.find { it.id == booking.vehicleId }
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                        shape = RoundedCornerShape(24.dp),
+                        border = BorderStroke(1.dp, SurfaceGlassElevated),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("user_booking_card_${booking.id}")
+                    ) {
+                        Column {
+                            // Banner block
                             Box(
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(color)
-                                    .border(
-                                        BorderStroke(1.dp, iconColor.copy(alpha = 0.3f)),
-                                        RoundedCornerShape(16.dp)
-                                    )
-                                    .padding(horizontal = 20.dp),
-                                contentAlignment = alignment
+                                    .fillMaxWidth()
+                                    .height(140.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
-                                        Icon(icon, contentDescription = null, tint = iconColor)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(label, color = iconColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                    } else if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
-                                        Text(label, color = iconColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Icon(icon, contentDescription = null, tint = iconColor)
+                                val cardImageUrl = when {
+                                    booking.experienceTitle.contains("Yacht") -> "https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&q=80&w=600"
+                                    booking.experienceTitle.contains("Speedboat") -> "https://images.unsplash.com/photo-1559136555-9303baea8ebd?auto=format&fit=crop&q=80&w=600"
+                                    booking.experienceTitle.contains("Helicopter") -> "https://images.unsplash.com/photo-1530841377377-3ff06c0ca713?auto=format&fit=crop&q=80&w=600"
+                                    else -> "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&q=80&w=600"
+                                }
+                                AsyncImage(
+                                    model = cardImageUrl,
+                                    contentDescription = booking.experienceTitle,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                                                startY = 100f
+                                            )
+                                        )
+                                )
+                                
+                                // Left schedule badge
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .padding(12.dp)
+                                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Schedule, contentDescription = "Schedule", tint = GoldLight, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(booking.timeSlot, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
-                            }
-                        },
-                        content = {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        expandedBookingId = if (isExpanded) null else booking.id
+
+                                // Right status badge
+                                val (statusText, statusBg, statusColor) = when (booking.status) {
+                                    "Pending" -> Triple("Awaiting VIP Approval", StatusAlertAmber.copy(alpha = 0.9f), Color.White)
+                                    "Confirmed" -> Triple("Confirmed Voyage", StatusPaidBlue, Color.White)
+                                    "Paid" -> Triple("VIP Charter Certified", StatusLiveGreen, Color.White)
+                                    "Checked In" -> Triple("Now Boarding", GoldPremium, Color.White)
+                                    "Completed" -> Triple("Voyage Completed", Color.Gray, Color.White)
+                                    else -> Triple("Cancelled", StatusErrorRed, Color.White)
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(12.dp)
+                                        .background(statusBg, RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                                }
+
+                                // Bottom left / right overlay
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = booking.experienceTitle,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     }
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = "€${String.format("%,.0f", booking.revenue)}",
+                                        color = GoldLight,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
+                            }
+
+                            // Details content block
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    // Vessel Info
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.weight(1f),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .background(GoldLight.copy(alpha = 0.5f), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Default.DirectionsBoat, contentDescription = "Boat", tint = GoldPremium, modifier = Modifier.size(18.dp))
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text("VESSEL / CRAFT", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                            Text(assignedVehicle?.name ?: "Premium Charter", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        }
+                                    }
+
+                                    // Captain / Crew Info
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .background(BronzeWarm.copy(alpha = 0.5f), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Default.Person, contentDescription = "Crew", tint = Color(0xFF1070B8), modifier = Modifier.size(18.dp))
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text("VIP CAPTAIN / PILOT", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                            Text(assignedStaff?.name ?: "Elite Host", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Divider(color = SurfaceGlassElevated.copy(alpha = 0.6f))
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // Date & Location Row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.CalendarToday, contentDescription = "Date", tint = TextSecondary, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Date: ${booking.date}", style = MaterialTheme.typography.bodySmall, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                                    }
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Place, contentDescription = "Pickup", tint = TextSecondary, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Marina Grande", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                                    }
+                                }
+
+                                if (booking.notes.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(GoldLight.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                                            .padding(10.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Star, contentDescription = "Notes", tint = GoldPremium, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
                                             Text(
-                                                booking.customerName,
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.Bold,
-                                                color = TextPrimary
-                                            )
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                booking.experienceTitle,
+                                                "VIP Concierge Request: \"${booking.notes}\"",
                                                 style = MaterialTheme.typography.bodySmall,
-                                                color = GoldPremium,
+                                                fontStyle = FontStyle.Italic,
+                                                color = TextSecondary,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }
-
-                                        // Custom status badge
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(
-                                                    when (booking.status) {
-                                                        "Confirmed" -> StatusPaidBlue.copy(alpha = 0.2f)
-                                                        "Checked In" -> StatusLiveGreen.copy(alpha = 0.2f)
-                                                        "Paid" -> StatusLiveGreen.copy(alpha = 0.2f)
-                                                        "Pending" -> StatusAlertAmber.copy(alpha = 0.2f)
-                                                        else -> StatusErrorRed.copy(alpha = 0.2f)
-                                                    }
-                                                )
-                                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        ) {
-                                            Text(
-                                                booking.status,
-                                                color = when (booking.status) {
-                                                    "Confirmed" -> StatusPaidBlue
-                                                    "Checked In" -> StatusLiveGreen
-                                                    "Paid" -> StatusLiveGreen
-                                                    "Pending" -> StatusAlertAmber
-                                                    else -> StatusErrorRed
-                                                },
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 11.sp
-                                            )
-                                        }
                                     }
+                                }
 
-                                    Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                // User action buttons
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { activeBoardingPassBooking = booking },
+                                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = Color.White),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(1.1f)
                                     ) {
-                                        Text("Date: ${booking.date}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                                        Text("Value: €${String.format("%,.0f", booking.revenue)}", style = MaterialTheme.typography.bodySmall, color = GoldLight, fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.QrCode, contentDescription = "Ticket", modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Boarding Pass", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                     }
 
-                                    if (isExpanded) {
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Divider(color = SurfaceGlassElevated)
-                                        Spacer(modifier = Modifier.height(12.dp))
-
-                                        Text("Time: ${booking.timeSlot}", style = MaterialTheme.typography.bodySmall, color = TextPrimary)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("Assigned Crew ID: #00${booking.staffId}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("Assigned Vessel ID: #00${booking.vehicleId}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("Guest Preferences: ${booking.notes.ifEmpty { "None recorded" }}", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("Operator Comments: ${booking.internalComment.ifEmpty { "None" }}", style = MaterialTheme.typography.bodySmall, color = GoldLight)
-
-                                        Spacer(modifier = Modifier.height(16.dp))
-
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            if (booking.status != "Checked In") {
-                                                Button(
-                                                    onClick = {
-                                                        viewModel.updateBookingStatus(booking.id, "Checked In")
-                                                        Toast.makeText(context, "Guest Checked In Successfully", Toast.LENGTH_SHORT).show()
-                                                    },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = StatusLiveGreen, contentColor = SlateDarkBg),
-                                                    shape = RoundedCornerShape(8.dp)
-                                                ) {
-                                                    Text("Check In", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                                }
-                                            }
-
-                                            if (booking.status != "Paid") {
-                                                Button(
-                                                    onClick = {
-                                                        viewModel.updateBookingStatus(booking.id, "Paid")
-                                                        Toast.makeText(context, "Invoice Marked Paid", Toast.LENGTH_SHORT).show()
-                                                    },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
-                                                    shape = RoundedCornerShape(8.dp)
-                                                ) {
-                                                    Text("Mark Paid", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                                }
-                                            }
-
-                                            Button(
-                                                onClick = {
-                                                    viewModel.updateBookingStatus(booking.id, "Cancelled")
-                                                    Toast.makeText(context, "Excursion Cancelled", Toast.LENGTH_SHORT).show()
-                                                },
-                                                colors = ButtonDefaults.buttonColors(containerColor = StatusErrorRed, contentColor = TextPrimary),
-                                                shape = RoundedCornerShape(8.dp)
-                                            ) {
-                                                Text("Cancel", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                            }
-                                        }
+                                    OutlinedButton(
+                                        onClick = { activeChatBooking = booking },
+                                        border = BorderStroke(1.dp, GoldPremium),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldPremium),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.weight(0.9f)
+                                    ) {
+                                        Icon(Icons.Default.Face, contentDescription = "Concierge", modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Concierge", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                     }
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal Dialog: Digital Boarding Pass
+    if (activeBoardingPassBooking != null) {
+        val booking = activeBoardingPassBooking!!
+        val assignedStaff = staffList.find { it.id == booking.staffId }
+        val assignedVehicle = vehicleList.find { it.id == booking.vehicleId }
+
+        Dialog(onDismissRequest = { activeBoardingPassBooking = null }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, GoldPremium),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Header Logo / Brand Accent
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "DIAMONDS CO.",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.5.sp,
+                            color = GoldPremium
+                        )
+                        Box(
+                            modifier = Modifier
+                                .background(GoldLight, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                "ELITE PASS",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = GoldPremium
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Title of Experience
+                    Text(
+                        booking.experienceTitle,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = TextPrimary,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Luxury Voyage Reservation Pass",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Stylized QR code with Sweeping laser
+                    val infiniteTransition = rememberInfiniteTransition(label = "QR Scan Animation")
+                    val laserPosition by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(2200, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "LaserLine"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .background(Color.White, RoundedCornerShape(12.dp))
+                            .border(1.dp, SurfaceGlassElevated, RoundedCornerShape(12.dp))
+                            .padding(16.dp)
+                    ) {
+                        StylizedQrCode(
+                            content = booking.ticketQrCode,
+                            modifier = Modifier.size(160.dp)
+                        )
+                        Canvas(modifier = Modifier.size(160.dp)) {
+                            val y = size.height * laserPosition
+                            drawLine(
+                                color = Color(0xFF10B981),
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = 3.dp.toPx()
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        booking.ticketQrCode,
+                        fontSize = 10.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        color = TextMuted,
+                        letterSpacing = 0.5.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Dotted ticket punch out line
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(12.dp)
+                    ) {
+                        val pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(15f, 15f), 0f)
+                        drawLine(
+                            color = SurfaceGlassElevated,
+                            start = Offset(0f, size.height / 2),
+                            end = Offset(size.width, size.height / 2),
+                            strokeWidth = 2.dp.toPx(),
+                            pathEffect = pathEffect
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Passenger Details Grid
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("PASSENGER", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                            Text(booking.customerName.take(18), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("DEPARTURE DATE", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                            Text(booking.date, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("CRAFT / VESSEL", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                            Text(assignedVehicle?.name ?: "Superyacht", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("BOARDING TIME", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                            Text(booking.timeSlot.split("-").first().trim(), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("ASSIGNED CAPTAIN", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                            Text(assignedStaff?.name ?: "Marco Rossi", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("PORT TERMINAL", fontSize = 9.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                            Text("Marina Grande", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GoldPremium)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Apple / Google Wallet integration
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                Toast.makeText(context, "Charter synced to Google Wallet & Apple Calendar!", Toast.LENGTH_SHORT).show()
+                            },
+                            border = BorderStroke(1.dp, SurfaceGlassElevated),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Add to Wallet", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = { activeBoardingPassBooking = null },
+                            colors = ButtonDefaults.buttonColors(containerColor = GoldPremium),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Done", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal Dialog: Direct Concierge Private Chat
+    if (activeChatBooking != null) {
+        val booking = activeChatBooking!!
+        var chatInputText by remember { mutableStateOf("") }
+        var chatMessages by remember { mutableStateOf(listOf<Pair<String, String>>()) }
+
+        // Initialize chat with prefilled greetings
+        LaunchedEffect(booking.id) {
+            chatMessages = listOf(
+                "Concierge" to "Benvenuto, VIP Traveler! I am your dedicated private concierge for your upcoming '${booking.experienceTitle}' excursion on ${booking.date}.\n\nHow can I perfect your luxury yachting or heli-excursion itinerary today? (e.g. specialized champagnes, private driver transfers, custom catering requests)"
+            )
+        }
+
+        Dialog(onDismissRequest = { activeChatBooking = null }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, GoldPremium),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(480.dp)
+                        .padding(16.dp)
+                ) {
+                    // Chat header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(GoldPremium, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Face, contentDescription = "Concierge", tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("Private Concierge", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(Color(0xFF10B981), CircleShape)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Online Assist", fontSize = 10.sp, color = Color(0xFF10B981), fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        IconButton(onClick = { activeChatBooking = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Divider(color = SurfaceGlassElevated)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Message lists
+                    val listState = rememberLazyListState()
+                    LaunchedEffect(chatMessages.size) {
+                        listState.animateScrollToItem(chatMessages.size)
+                    }
+
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(chatMessages) { (sender, text) ->
+                            val isUser = sender == "Guest"
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(
+                                            RoundedCornerShape(
+                                                topStart = 16.dp,
+                                                topEnd = 16.dp,
+                                                bottomStart = if (isUser) 16.dp else 4.dp,
+                                                bottomEnd = if (isUser) 4.dp else 16.dp
+                                            )
+                                        )
+                                        .background(if (isUser) GoldPremium else SurfaceGlassElevated.copy(alpha = 0.5f))
+                                        .padding(12.dp)
+                                        .widthIn(max = 220.dp)
+                                ) {
+                                    Text(
+                                        text = text,
+                                        color = if (isUser) Color.White else TextPrimary,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Divider(color = SurfaceGlassElevated)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Chat Input text field
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = chatInputText,
+                            onValueChange = { chatInputText = it },
+                            placeholder = { Text("Ask the Concierge...") },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = GoldPremium,
+                                unfocusedBorderColor = SurfaceGlassElevated,
+                                focusedContainerColor = SurfaceGlass,
+                                unfocusedContainerColor = SurfaceGlass
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            trailingIcon = {
+                                if (chatInputText.isNotBlank()) {
+                                    IconButton(
+                                        onClick = {
+                                            val guestMsg = chatInputText
+                                            chatMessages = chatMessages + ("Guest" to guestMsg)
+                                            chatInputText = ""
+                                            
+                                            coroutineScope.launch {
+                                                kotlinx.coroutines.delay(1200)
+                                                val replies = listOf(
+                                                    "An exquisite selection! I have updated your charter requests and passed these instructions directly to Captain Marco Rossi. We will ensure everything is on board and chilled.",
+                                                    "Perfectly understood. I have logged this request with the vessel's steward. They will arrange premium catering to accommodate this request.",
+                                                    "Absolutely! We will sync with our private chef on board to finalize this request. Your updated details are fully secured.",
+                                                    "Of course! I have noted this preference in your VIP traveler card. The crew is fully briefed for your boarding tomorrow at Marina Grande Dock B."
+                                                )
+                                                chatMessages = chatMessages + ("Concierge" to replies.random())
+                                            }
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.Navigation, contentDescription = "Send", tint = GoldPremium)
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StylizedQrCode(content: String, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val sizePx = size.width
+        val cellSize = sizePx / 15f
+        
+        // Draw background
+        drawRect(color = Color.White)
+        
+        // Draw finder patterns (top-left, top-right, bottom-left)
+        // Top-left
+        drawRect(color = Color(0xFF1C1B1F), topLeft = Offset(0f, 0f), size = Size(cellSize * 5, cellSize * 5))
+        drawRect(color = Color.White, topLeft = Offset(cellSize, cellSize), size = Size(cellSize * 3, cellSize * 3))
+        drawRect(color = Color(0xFF1C1B1F), topLeft = Offset(cellSize * 2, cellSize * 2), size = Size(cellSize, cellSize))
+        
+        // Top-right
+        drawRect(color = Color(0xFF1C1B1F), topLeft = Offset(cellSize * 10, 0f), size = Size(cellSize * 5, cellSize * 5))
+        drawRect(color = Color.White, topLeft = Offset(cellSize * 11, cellSize), size = Size(cellSize * 3, cellSize * 3))
+        drawRect(color = Color(0xFF1C1B1F), topLeft = Offset(cellSize * 12, cellSize * 2), size = Size(cellSize, cellSize))
+        
+        // Bottom-left
+        drawRect(color = Color(0xFF1C1B1F), topLeft = Offset(0f, cellSize * 10), size = Size(cellSize * 5, cellSize * 5))
+        drawRect(color = Color.White, topLeft = Offset(cellSize, cellSize * 11), size = Size(cellSize * 3, cellSize * 3))
+        drawRect(color = Color(0xFF1C1B1F), topLeft = Offset(cellSize * 2, cellSize * 12), size = Size(cellSize, cellSize))
+        
+        // Seed deterministic pseudo-random noise
+        val hash = content.hashCode()
+        val random = java.util.Random(hash.toLong())
+        
+        for (row in 0 until 15) {
+            for (col in 0 until 15) {
+                // Skip finder patterns
+                if (row < 5 && col < 5) continue
+                if (row < 5 && col >= 10) continue
+                if (row >= 10 && col < 5) continue
+                
+                if (random.nextBoolean()) {
+                    drawRect(
+                        color = Color(0xFF1C1B1F),
+                        topLeft = Offset(col * cellSize, row * cellSize),
+                        size = Size(cellSize + 0.5f, cellSize + 0.5f)
                     )
                 }
             }
@@ -4739,6 +5466,11 @@ fun SettingsScreen(viewModel: DiamondsViewModel) {
     var biometricsEnabled by remember { mutableStateOf(true) }
     var offlineSyncEnabled by remember { mutableStateOf(true) }
 
+    // Observe Supabase Sync State
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val syncReport by viewModel.supabaseSyncReport.collectAsStateWithLifecycle()
+    val isSupabaseConfigured = viewModel.isSupabaseConfigured()
+
     // Architecture Hub States
     var selectedSpecSection by remember { mutableStateOf("none") } // "none", "supabase", "design", "react_native", "motion", "auth"
 
@@ -4825,22 +5557,174 @@ fun SettingsScreen(viewModel: DiamondsViewModel) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("DATABASE BACKEND CONNECTION", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = GoldPremium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("DATABASE BACKEND CONNECTION", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = GoldPremium)
+                    
+                    val badgeColor = if (isSupabaseConfigured) StatusLiveGreen else Color(0xFFFFB300)
+                    val badgeText = if (isSupabaseConfigured) "ACTIVE NODE" else "NOT CONFIG"
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(badgeColor.copy(alpha = 0.15f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = badgeText,
+                            color = badgeColor,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Supabase DB Status", color = TextSecondary)
-                    Text("Synchronized (Realtime)", color = StatusLiveGreen, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (isSupabaseConfigured) "Synchronized (Realtime)" else "Disconnected / Local Only",
+                        color = if (isSupabaseConfigured) StatusLiveGreen else TextMuted,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Supabase Replication Node", color = TextSecondary)
-                    Text("eu-west-2-production", color = TextPrimary)
+                    Text("Supabase Target Host", color = TextSecondary)
+                    Text(
+                        text = if (isSupabaseConfigured) {
+                            val host = com.example.BuildConfig.SUPABASE_URL.removePrefix("https://").removeSuffix("/")
+                            if (host.length > 25) host.take(22) + "..." else host
+                        } else "None configured",
+                        color = TextPrimary
+                    )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Local Room Latency", color = TextSecondary)
                     Text("0.1 ms (Direct-Cache)", color = GoldLight)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (isSupabaseConfigured) {
+                    Button(
+                        onClick = { viewModel.syncDataWithSupabase() },
+                        enabled = !isSyncing,
+                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = SlateDarkBg, strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("SYNCHRONIZING SECURE TUNNEL...", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        } else {
+                            Icon(Icons.Default.Sync, contentDescription = "Sync", modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("TRIGGER BACKEND HARDWARE SYNC", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        }
+                    }
+                } else {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceGlassElevated),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "INTEGRATION GUIDE",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = GoldPremium,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "This terminal is ready to sync local data with your private Supabase backend. Follow these steps to complete the link:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val steps = listOf(
+                                "1. Open the Secrets panel in AI Studio UI.",
+                                "2. Add SUPABASE_URL with your project base URL.",
+                                "3. Add SUPABASE_KEY with your anon/service key.",
+                                "4. Copy & run /supabase_schema.sql on Supabase."
+                            )
+                            steps.forEach { step ->
+                                Text(
+                                    text = step,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                syncReport?.let { report ->
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (report.success) Color(0xFF1B5E20).copy(alpha = 0.15f) else Color(0xFFC62828).copy(alpha = 0.15f)
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (report.success) StatusLiveGreen.copy(alpha = 0.4f) else Color(0xFFE57373).copy(alpha = 0.4f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (report.success) Icons.Default.CloudDone else Icons.Default.Warning,
+                                    contentDescription = "Sync Report",
+                                    tint = if (report.success) StatusLiveGreen else Color(0xFFE57373),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "SYNC REPORT",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (report.success) StatusLiveGreen else Color(0xFFE57373)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(report.message, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                            
+                            if (report.details.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                HorizontalDivider(color = SurfaceGlass)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                report.details.forEach { detail ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "• ${detail.tableName.uppercase()}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                        Text(
+                                            text = if (detail.success) "SUCCESS" else "FAILED",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (detail.success) StatusLiveGreen else Color(0xFFE57373),
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -5488,15 +6372,18 @@ fun SettingsScreen(viewModel: DiamondsViewModel) {
 }
 
 // ==========================================
-// 12. EMPLOYEE PROFILE SCREEN
+// 12. EMPLOYEE PROFILE SCREEN (WITH INTEGRATED SYSTEM SETTINGS)
 // ==========================================
 @Composable
 fun ProfileScreen(viewModel: DiamondsViewModel) {
     val loggedInUser by viewModel.loggedInUser.collectAsStateWithLifecycle()
     val securityLogs by viewModel.securityLogs.collectAsStateWithLifecycle()
+    val bookings by viewModel.bookings.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val u = loggedInUser ?: return
+
+    var editablePhone by remember(u.id) { mutableStateOf(u.phoneNumber) }
 
     var showPasswordChange by remember { mutableStateOf(false) }
     var changeOldPass by remember { mutableStateOf("") }
@@ -5504,115 +6391,146 @@ fun ProfileScreen(viewModel: DiamondsViewModel) {
     var changeAnswer by remember { mutableStateOf("") }
     var changeError by remember { mutableStateOf("") }
 
+    // Sub-Tabs for operator-only layout
+    var activeSubTab by remember { mutableStateOf("information") } // "information", "security"
+
+    // Dialog States for Quick Actions
+    var showQuickSettingsDialog by remember { mutableStateOf(false) }
+    var showAboutUsDialog by remember { mutableStateOf(false) }
+    var showContactTicketsDialog by remember { mutableStateOf(false) }
+
+    // Settings States
+    var settingsBiometric by remember { mutableStateOf(true) }
+    var settingsNotifications by remember { mutableStateOf(true) }
+    var settingsOfflineSync by remember { mutableStateOf(true) }
+    var settingsHighPerformance by remember { mutableStateOf(true) }
+
+    // Ticket States
+    val supportTickets by viewModel.supportTickets.collectAsStateWithLifecycle()
+    var ticketTitle by remember { mutableStateOf("") }
+    var ticketDescription by remember { mutableStateOf("") }
+    var ticketCategory by remember { mutableStateOf("IT Support") }
+    var ticketPriority by remember { mutableStateOf("Medium") }
+    var isCreatingTicket by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .background(SlateDarkBg)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Avatar
+        // 1. Visual Header Banner with Gradient Overlay
         Box(
             modifier = Modifier
-                .size(100.dp)
-                .clip(CircleShape)
-                .background(GoldPremium)
-                .padding(2.dp)
+                .fillMaxWidth()
+                .height(180.dp)
         ) {
+            AsyncImage(
+                model = "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&q=80&w=800",
+                contentDescription = "Amalfi Coast Premium Banner",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            // Premium Dark Gradient Overlay
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, SlateDarkBg),
+                            startY = 50f
+                        )
+                    )
+            )
+
+            // Overlaid Avatar at the bottom center of banner
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset(y = 30.dp)
+                    .size(96.dp)
                     .clip(CircleShape)
-                    .background(SlateDarkBg),
-                contentAlignment = Alignment.Center
+                    .background(GoldPremium)
+                    .padding(3.dp)
             ) {
-                Text(
-                    text = u.name.split(" ").map { it.take(1) }.joinToString("").take(2).uppercase(),
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = GoldPremium,
-                    fontFamily = FontFamily.Serif
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(SlateDarkBg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = u.name.split(" ").map { it.take(1) }.joinToString("").take(2).uppercase(),
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldPremium,
+                        fontFamily = FontFamily.Serif
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(40.dp))
 
+        // 2. Identity Text Labels
         Text(
             text = u.name,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
         )
 
-        Text(
-            text = "${u.role} • Active Operator",
-            style = MaterialTheme.typography.bodyMedium,
-            color = GoldPremium
-        )
+        Spacer(modifier = Modifier.height(4.dp))
 
-        Text(
-            text = u.email,
-            style = MaterialTheme.typography.bodySmall,
-            color = TextMuted,
-            modifier = Modifier.padding(top = 4.dp)
-        )
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(GoldPremium.copy(alpha = 0.15f))
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = "${u.role.uppercase()} • ACTIVE OPERATOR",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = GoldPremium,
+                letterSpacing = 1.sp
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Profile Badges Row
+        // 3. Horizontal Sub-Tab bar
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(SurfaceGlass)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+            val tabs = listOf(
+                "information" to "Information",
+                "security" to "Security"
+            )
+            tabs.forEach { (tabKey, label) ->
+                val isSelected = activeSubTab == tabKey
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSelected) GoldPremium.copy(alpha = 0.15f) else Color.Transparent)
+                        .clickable { activeSubTab = tabKey }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text("CREW RATING", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("⭐ ${u.rating}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = GoldPremium)
-                }
-            }
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("PERFORMANCE", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("${u.performanceScore}% Score", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
-                }
-            }
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("2FA STATUS", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (u.isTwoFactorEnabled) "ENABLED" else "DISABLED",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (u.isTwoFactorEnabled) Color(0xFF81C784) else Color(0xFFE57373)
+                        text = label,
+                        color = if (isSelected) GoldPremium else TextSecondary,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
@@ -5620,212 +6538,389 @@ fun ProfileScreen(viewModel: DiamondsViewModel) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Security Configuration Section
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("OPERATOR SECURITY SUITE", style = MaterialTheme.typography.labelSmall, color = GoldPremium, letterSpacing = 1.sp)
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // MFA Switch Toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Multi-Factor Authentication (MFA)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Text(
-                            "Require secure dynamic PIN verification on session start.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextMuted
-                        )
-                    }
-                    Switch(
-                        checked = u.isTwoFactorEnabled,
-                        onCheckedChange = { isEnabled ->
-                            val updated = u.copy(isTwoFactorEnabled = isEnabled)
-                            viewModel.updateSecureProfile(updated)
-                            viewModel.addSecurityLog("2FA_TOGGLE", "MFA toggled to ${if (isEnabled) "ENABLED" else "DISABLED"} by operator.")
-                            Toast.makeText(context, "MFA status updated.", Toast.LENGTH_SHORT).show()
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = GoldPremium,
-                            checkedTrackColor = GoldPremium.copy(alpha = 0.4f),
-                            uncheckedThumbColor = TextMuted,
-                            uncheckedTrackColor = SurfaceGlassElevated
-                        )
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = SurfaceGlassElevated)
-
-                // Password change block
-                if (!showPasswordChange) {
-                    OutlinedButton(
-                        onClick = { showPasswordChange = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.5f)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldPremium)
-                    ) {
-                        Text("CHANGE OPERATOR PASSWORD")
-                    }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Update Session Credentials", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
-                        
-                        if (changeError.isNotEmpty()) {
-                            Text(changeError, color = Color(0xFFE57373), style = MaterialTheme.typography.bodySmall)
-                        }
-
-                        OutlinedTextField(
-                            value = changeOldPass,
-                            onValueChange = { changeOldPass = it },
-                            label = { Text("Verify Current Password") },
-                            visualTransformation = PasswordVisualTransformation(),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = GoldPremium),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        OutlinedTextField(
-                            value = changeNewPass,
-                            onValueChange = { changeNewPass = it },
-                            label = { Text("New Secure Password (PIN)") },
-                            visualTransformation = PasswordVisualTransformation(),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = GoldPremium),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Text("Security Question Verification:", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                        Card(colors = CardDefaults.cardColors(containerColor = SurfaceGlassElevated)) {
-                            Text(u.securityQuestion, modifier = Modifier.padding(12.dp), color = TextPrimary, style = MaterialTheme.typography.bodySmall)
-                        }
-
-                        OutlinedTextField(
-                            value = changeAnswer,
-                            onValueChange = { changeAnswer = it },
-                            label = { Text("Your Recovery Answer") },
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = GoldPremium),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
+        // 4. Sub-Tab Content Switcher
+        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+            when (activeSubTab) {
+                "information" -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        // Analytics / Statistics Micro-Cards
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            OutlinedButton(
-                                onClick = { 
-                                    showPasswordChange = false
-                                    changeOldPass = ""
-                                    changeNewPass = ""
-                                    changeAnswer = ""
-                                    changeError = ""
-                                },
+                            val staffBookingsCount = bookings.count { it.staffId == u.id }
+
+                            // Card 1: Completed Trips
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                                border = BorderStroke(1.dp, SurfaceGlassElevated),
+                                shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("Cancel")
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(Icons.Default.DirectionsBoat, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("ASSIGNED TRIPS", style = MaterialTheme.typography.labelSmall, color = TextMuted, fontSize = 9.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("$staffBookingsCount Trips", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                }
                             }
 
-                            Button(
-                                onClick = {
-                                    if (changeOldPass != u.passwordHash) {
-                                        changeError = "Current password verification failed."
-                                    } else if (changeAnswer.trim().lowercase(Locale.ROOT) != u.securityAnswer.trim().lowercase(Locale.ROOT)) {
-                                        changeError = "Security recovery answer is incorrect."
-                                    } else if (changeNewPass.length < 4) {
-                                        changeError = "New password must be at least 4 characters."
-                                    } else {
-                                        val updated = u.copy(passwordHash = changeNewPass)
-                                        viewModel.updateSecureProfile(updated)
-                                        viewModel.addSecurityLog("PASSWORD_CHANGE", "Password successfully changed in settings.")
-                                        Toast.makeText(context, "Password updated successfully!", Toast.LENGTH_SHORT).show()
-                                        showPasswordChange = false
-                                        changeOldPass = ""
-                                        changeNewPass = ""
-                                        changeAnswer = ""
-                                        changeError = ""
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
-                                modifier = Modifier.weight(1.5f)
+                            // Card 2: Rating
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                                border = BorderStroke(1.dp, SurfaceGlassElevated),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Text("Save Credentials")
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(Icons.Default.Star, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("RATING", style = MaterialTheme.typography.labelSmall, color = TextMuted, fontSize = 9.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("⭐ ${u.rating}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = GoldPremium)
+                                }
+                            }
+
+                            // Card 3: Performance Score
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                                border = BorderStroke(1.dp, SurfaceGlassElevated),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(Icons.Default.Speed, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("PERFORMANCE", style = MaterialTheme.typography.labelSmall, color = TextMuted, fontSize = 9.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("${u.performanceScore}% Score", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                }
+                            }
+                        }
+
+                        // Detailed Personal Information Card
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                            border = BorderStroke(1.dp, SurfaceGlassElevated),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "OPERATOR CREDENTIALS",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = GoldPremium,
+                                    letterSpacing = 1.2.sp
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Full Name", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                                    Text(u.name, color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = SurfaceGlassElevated.copy(alpha = 0.5f))
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Username", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                                    Text(u.email.substringBefore("@"), color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = SurfaceGlassElevated.copy(alpha = 0.5f))
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Corporate Email", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                                    Text(u.email, color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = SurfaceGlassElevated.copy(alpha = 0.5f))
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Registry Code", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                                    Text("DS-OPERATOR-0${u.id}", color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = SurfaceGlassElevated.copy(alpha = 0.5f))
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Enterprise Binding", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                                    Text("Diamonds Elite Yachting Group", color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = SurfaceGlassElevated.copy(alpha = 0.5f))
+
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Registry Status", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                                    val isLocked = u.isLocked
+                                    val statusColor = if (isLocked) Color(0xFFE57373) else StatusLiveGreen
+                                    val statusText = if (isLocked) "Locked (Audit Required)" else "Active (On-Duty - ${u.attendanceStatus})"
+                                    Text(
+                                        text = statusText.uppercase(),
+                                        color = statusColor,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+
+                        // Editable Contact Sheet
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                            border = BorderStroke(1.dp, SurfaceGlassElevated),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "UPDATE OPERATOR METADATA",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = GoldPremium,
+                                    letterSpacing = 1.2.sp
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = editablePhone,
+                                    onValueChange = { editablePhone = it },
+                                    label = { Text("Contact Number") },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = GoldPremium,
+                                        unfocusedBorderColor = SurfaceGlassElevated,
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        focusedContainerColor = SurfaceGlassElevated,
+                                        unfocusedContainerColor = SurfaceGlassElevated
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Button(
+                                    onClick = {
+                                        val updated = u.copy(
+                                            phoneNumber = editablePhone.trim()
+                                        )
+                                        viewModel.updateSecureProfile(updated)
+                                        Toast.makeText(context, "Operator profile cached securely.", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("SAVE PROFILE DETAILS", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
                 }
-            }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Real-Time Security Audit Logs
-        Card(
-            colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("SECURITY AUDIT TRAIL", style = MaterialTheme.typography.labelSmall, color = GoldPremium, letterSpacing = 1.sp)
-                    Icon(Icons.Default.Lock, contentDescription = null, tint = GoldPremium.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-
-                securityLogs.take(6).forEach { log ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                "security" -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                            border = BorderStroke(1.dp, SurfaceGlassElevated),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = "[${log.eventType}]",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = when (log.eventType) {
-                                    "LOGIN_SUCCESS" -> Color(0xFF81C784)
-                                    "LOGIN_FAILURE", "LOGIN_LOCK" -> Color(0xFFE57373)
-                                    "PASSWORD_RESET", "PASSWORD_CHANGE" -> Color(0xFF64B5F6)
-                                    else -> GoldPremium
-                                },
-                                fontSize = 11.sp
-                            )
-                            Text(
-                                text = log.timestamp,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextMuted,
-                                fontSize = 10.sp
-                            )
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("OPERATOR SECURITY SUITE", style = MaterialTheme.typography.labelSmall, color = GoldPremium, letterSpacing = 1.sp)
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Multi-Factor Authentication", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        Text("Require PIN verification on session start", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                                    }
+                                    Switch(
+                                        checked = u.isTwoFactorEnabled,
+                                        onCheckedChange = { isEnabled ->
+                                            val updated = u.copy(isTwoFactorEnabled = isEnabled)
+                                            viewModel.updateSecureProfile(updated)
+                                            viewModel.addSecurityLog("2FA_TOGGLE", "MFA toggled to ${if (isEnabled) "ENABLED" else "DISABLED"}.")
+                                            Toast.makeText(context, "MFA status updated.", Toast.LENGTH_SHORT).show()
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = GoldPremium,
+                                            checkedTrackColor = GoldPremium.copy(alpha = 0.4f),
+                                            uncheckedThumbColor = TextMuted,
+                                            uncheckedTrackColor = SurfaceGlassElevated
+                                        )
+                                    )
+                                }
+
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = SurfaceGlassElevated)
+
+                                if (!showPasswordChange) {
+                                    OutlinedButton(
+                                        onClick = { showPasswordChange = true },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.5f)),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldPremium)
+                                    ) {
+                                        Text("CHANGE OPERATOR PASSWORD")
+                                    }
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text("Update Session Credentials", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+
+                                        if (changeError.isNotEmpty()) {
+                                            Text(changeError, color = Color(0xFFE57373), style = MaterialTheme.typography.bodySmall)
+                                        }
+
+                                        OutlinedTextField(
+                                            value = changeOldPass,
+                                            onValueChange = { changeOldPass = it },
+                                            label = { Text("Verify Current Password") },
+                                            visualTransformation = PasswordVisualTransformation(),
+                                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = GoldPremium),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            singleLine = true
+                                        )
+
+                                        OutlinedTextField(
+                                            value = changeNewPass,
+                                            onValueChange = { changeNewPass = it },
+                                            label = { Text("New Secure Password (PIN)") },
+                                            visualTransformation = PasswordVisualTransformation(),
+                                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = GoldPremium),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            singleLine = true
+                                        )
+
+                                        Text("Security Question Verification:", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                                        Card(colors = CardDefaults.cardColors(containerColor = SurfaceGlassElevated)) {
+                                            Text(u.securityQuestion, modifier = Modifier.padding(12.dp), color = TextPrimary, style = MaterialTheme.typography.bodySmall)
+                                        }
+
+                                        OutlinedTextField(
+                                            value = changeAnswer,
+                                            onValueChange = { changeAnswer = it },
+                                            label = { Text("Your Recovery Answer") },
+                                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = GoldPremium),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            singleLine = true
+                                        )
+
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    showPasswordChange = false
+                                                    changeOldPass = ""
+                                                    changeNewPass = ""
+                                                    changeAnswer = ""
+                                                    changeError = ""
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("Cancel")
+                                            }
+
+                                            Button(
+                                                onClick = {
+                                                    if (changeOldPass != u.passwordHash) {
+                                                        changeError = "Current password verification failed."
+                                                    } else if (changeAnswer.trim().lowercase(Locale.ROOT) != u.securityAnswer.trim().lowercase(Locale.ROOT)) {
+                                                        changeError = "Security recovery answer is incorrect."
+                                                    } else if (changeNewPass.length < 4) {
+                                                        changeError = "New password must be at least 4 characters."
+                                                    } else {
+                                                        val updated = u.copy(passwordHash = changeNewPass)
+                                                        viewModel.updateSecureProfile(updated)
+                                                        viewModel.addSecurityLog("PASSWORD_CHANGE", "Password successfully changed in settings.")
+                                                        Toast.makeText(context, "Password updated successfully!", Toast.LENGTH_SHORT).show()
+                                                        showPasswordChange = false
+                                                        changeOldPass = ""
+                                                        changeNewPass = ""
+                                                        changeAnswer = ""
+                                                        changeError = ""
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                                                modifier = Modifier.weight(1.5f)
+                                            ) {
+                                                Text("Save Credentials")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = log.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextPrimary,
-                            fontSize = 11.sp
-                        )
-                        Text(
-                            text = "Authenticated Node IP: ${log.ipAddress}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextMuted,
-                            fontSize = 9.sp,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                        HorizontalDivider(modifier = Modifier.padding(top = 6.dp), color = SurfaceGlassElevated.copy(alpha = 0.5f))
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                            border = BorderStroke(1.dp, SurfaceGlassElevated),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("SECURITY AUDIT TRAIL", style = MaterialTheme.typography.labelSmall, color = GoldPremium, letterSpacing = 1.sp)
+                                    Icon(Icons.Default.Lock, contentDescription = null, tint = GoldPremium.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                securityLogs.take(4).forEach { log ->
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "[${log.eventType}]",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (log.eventType.contains("SUCCESS")) Color(0xFF81C784) else GoldPremium,
+                                                fontSize = 11.sp
+                                            )
+                                            Text(
+                                                text = log.timestamp,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = TextMuted,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = log.message,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextPrimary,
+                                            fontSize = 11.sp
+                                        )
+                                        Text(
+                                            text = "Node IP: ${log.ipAddress}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextMuted,
+                                            fontSize = 9.sp,
+                                            modifier = Modifier.padding(top = 1.dp)
+                                        )
+                                        HorizontalDivider(modifier = Modifier.padding(top = 4.dp), color = SurfaceGlassElevated.copy(alpha = 0.3f))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -5833,7 +6928,7 @@ fun ProfileScreen(viewModel: DiamondsViewModel) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Session Logout
+        // 5. Always display logout button nicely styled at the bottom
         Button(
             onClick = {
                 viewModel.performLogout()
@@ -5841,15 +6936,606 @@ fun ProfileScreen(viewModel: DiamondsViewModel) {
             },
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 16.dp)
                 .height(50.dp)
                 .testTag("logout_button"),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828), contentColor = Color.White),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("SECURELY DISCONNECT SESSION", fontWeight = FontWeight.Bold)
+            Icon(Icons.Default.Logout, contentDescription = "Logout", tint = Color.White)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(" Log out", fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Quick action buttons panel (Replacing the terminal protocol footer card)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "QUICK PORTAL ACTIONS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = GoldPremium,
+                    letterSpacing = 1.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Settings button
+                    Button(
+                        onClick = { showQuickSettingsDialog = true },
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceGlassElevated, contentColor = TextPrimary),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings", tint = GoldPremium, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Settings", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // About Us button
+                    Button(
+                        onClick = { showAboutUsDialog = true },
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceGlassElevated, contentColor = TextPrimary),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = "About Us", tint = GoldPremium, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("About Us", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Support Tickets button
+                    Button(
+                        onClick = { showContactTicketsDialog = true },
+                        modifier = Modifier.weight(1.2f).height(44.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceGlassElevated, contentColor = TextPrimary),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.ConfirmationNumber, contentDescription = "Tickets", tint = GoldPremium, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Tickets Sys", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(30.dp))
+    }
+
+    // Settings Dialog
+    if (showQuickSettingsDialog) {
+        Dialog(onDismissRequest = { showQuickSettingsDialog = false }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceGlassElevated),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.3f)),
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("OPERATOR PREFERENCES", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = GoldPremium)
+                        IconButton(onClick = { showQuickSettingsDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Biometrics Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Biometric Security Handshake", color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Unlock terminal using fingerprints or face unlock.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        }
+                        Switch(
+                            checked = settingsBiometric,
+                            onCheckedChange = { settingsBiometric = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = GoldPremium, checkedTrackColor = GoldPremium.copy(alpha = 0.3f))
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = SurfaceGlass.copy(alpha = 0.5f))
+
+                    // Push Notifications Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Realtime Dispatch Alerts", color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Receive high-priority vessel schedule updates.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        }
+                        Switch(
+                            checked = settingsNotifications,
+                            onCheckedChange = { settingsNotifications = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = GoldPremium, checkedTrackColor = GoldPremium.copy(alpha = 0.3f))
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = SurfaceGlass.copy(alpha = 0.5f))
+
+                    // Offline Sync Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Offline Transaction Queuing", color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Queue writes locally when out at deep sea.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        }
+                        Switch(
+                            checked = settingsOfflineSync,
+                            onCheckedChange = { settingsOfflineSync = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = GoldPremium, checkedTrackColor = GoldPremium.copy(alpha = 0.3f))
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = SurfaceGlass.copy(alpha = 0.5f))
+
+                    // High Performance Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Hardware Acceleration", color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Enable high-density spring physics rendering.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        }
+                        Switch(
+                            checked = settingsHighPerformance,
+                            onCheckedChange = { settingsHighPerformance = it },
+                            colors = SwitchDefaults.colors(checkedThumbColor = GoldPremium, checkedTrackColor = GoldPremium.copy(alpha = 0.3f))
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Button(
+                        onClick = {
+                            showQuickSettingsDialog = false
+                            Toast.makeText(context, "Preferences cached to secure system.", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Apply Configurations", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    // About Us Dialog
+    if (showAboutUsDialog) {
+        Dialog(onDismissRequest = { showAboutUsDialog = false }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceGlassElevated),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.3f)),
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("ABOUT DIAMONDS ELITE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = GoldPremium)
+                        IconButton(onClick = { showAboutUsDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        "Diamonds Elite Yachting Group is the premier private marine excursion operator along the Amalfi Coast and Sorrento peninsula.",
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        "Our mission is to marry ultra-luxury maritime hospitality with bleeding-edge fleet security and live telemetry. Every vessel, guide, and route is certified under Diamonds Strict Protocol standards to ensure safety, extreme discretion, and bespoke experiences.",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text("FLEET STATS", fontWeight = FontWeight.Bold, color = GoldPremium, style = MaterialTheme.typography.labelSmall)
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    val stats = listOf(
+                        "Active Fleet Count" to "12 Custom Mega Yachts & Speedboats",
+                        "Certified Captains" to "8 Master Mariners",
+                        "Port of Registry" to "Amalfi Harbor (Molo Pennello)",
+                        "Secure Protocol" to "AES-256 Multi-Node Local Ledger"
+                    )
+
+                    stats.forEach { (label, value) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(label, color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                            Text(value, color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Button(
+                        onClick = { showAboutUsDialog = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Acknowledge", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    // Contact Us (Ticket System) Dialog
+    if (showContactTicketsDialog) {
+        Dialog(onDismissRequest = { 
+            showContactTicketsDialog = false
+            isCreatingTicket = false
+            ticketTitle = ""
+            ticketDescription = ""
+        }) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceGlassElevated),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.3f)),
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isCreatingTicket) "FILE NEW SUPPORT TICKET" else "OPERATOR TICKET SYSTEM",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = GoldPremium
+                        )
+                        IconButton(onClick = { 
+                            showContactTicketsDialog = false
+                            isCreatingTicket = false
+                            ticketTitle = ""
+                            ticketDescription = ""
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (isCreatingTicket) {
+                        // File a new ticket view
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = ticketTitle,
+                                onValueChange = { ticketTitle = it },
+                                label = { Text("Short Subject") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = GoldPremium),
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            OutlinedTextField(
+                                value = ticketDescription,
+                                onValueChange = { ticketDescription = it },
+                                label = { Text("Detailed Description") },
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = GoldPremium),
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 3
+                            )
+
+                            // Category selector
+                            Text("Category:", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                val categories = listOf("IT Support", "Vessel", "Dispatch", "Logistics")
+                                categories.forEach { cat ->
+                                    val isSel = ticketCategory == cat
+                                    Button(
+                                        onClick = { ticketCategory = cat },
+                                        modifier = Modifier.weight(1f).height(36.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isSel) GoldPremium else SurfaceGlass,
+                                            contentColor = if (isSel) SlateDarkBg else TextPrimary
+                                        ),
+                                        contentPadding = PaddingValues(0.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(cat, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            // Priority selector
+                            Text("Priority Level:", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val priorities = listOf("Low", "Medium", "High")
+                                priorities.forEach { prio ->
+                                    val isSel = ticketPriority == prio
+                                    val prioColor = when(prio) {
+                                        "High" -> Color(0xFFE57373)
+                                        "Medium" -> GoldLight
+                                        else -> Color(0xFF81C784)
+                                    }
+                                    Button(
+                                        onClick = { ticketPriority = prio },
+                                        modifier = Modifier.weight(1f).height(36.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isSel) prioColor else SurfaceGlass,
+                                            contentColor = if (isSel) SlateDarkBg else TextPrimary
+                                        ),
+                                        contentPadding = PaddingValues(0.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(prio, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { isCreatingTicket = false },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Back to Tickets")
+                                }
+
+                                Button(
+                                    onClick = {
+                                        if (ticketTitle.isBlank() || ticketDescription.isBlank()) {
+                                            Toast.makeText(context, "Please fill in all fields.", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            viewModel.createSupportTicket(
+                                                title = ticketTitle.trim(),
+                                                description = ticketDescription.trim(),
+                                                priority = ticketPriority,
+                                                category = ticketCategory
+                                            )
+                                            Toast.makeText(context, "Ticket successfully submitted. Direct Node sync complete.", Toast.LENGTH_SHORT).show()
+                                            isCreatingTicket = false
+                                            ticketTitle = ""
+                                            ticketDescription = ""
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1.5f)
+                                ) {
+                                    Text("Submit Ticket")
+                                }
+                            }
+                        }
+                    } else {
+                        // Tickets list view
+                        Column(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Active Operational Tickets", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                                TextButton(
+                                    onClick = { isCreatingTicket = true },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = "New Ticket", tint = GoldPremium, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("File New", color = GoldPremium, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 280.dp)
+                            ) {
+                                if (supportTickets.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("No active tickets found.", color = TextMuted, style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        items(supportTickets) { ticket ->
+                                            Card(
+                                                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                                                border = BorderStroke(1.dp, SurfaceGlassElevated),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = ticket.category.uppercase(),
+                                                            color = GoldPremium,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontSize = 9.sp,
+                                                            letterSpacing = 0.5.sp
+                                                        )
+                                                        Row(
+                                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            // Status badge
+                                                            val statusColor = when (ticket.status) {
+                                                                "Resolved" -> Color(0xFF81C784)
+                                                                "Processing" -> GoldLight
+                                                                else -> Color(0xFFE57373)
+                                                            }
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .clip(RoundedCornerShape(4.dp))
+                                                                    .background(statusColor.copy(alpha = 0.15f))
+                                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = ticket.status.uppercase(),
+                                                                    color = statusColor,
+                                                                    fontSize = 8.sp,
+                                                                    fontWeight = FontWeight.Bold
+                                                                )
+                                                            }
+
+                                                            // Priority badge
+                                                            val prioColor = when (ticket.priority) {
+                                                                "High" -> Color(0xFFE57373)
+                                                                "Medium" -> GoldLight
+                                                                else -> Color(0xFF81C784)
+                                                            }
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .clip(RoundedCornerShape(4.dp))
+                                                                    .background(prioColor.copy(alpha = 0.15f))
+                                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = ticket.priority.uppercase(),
+                                                                    color = prioColor,
+                                                                    fontSize = 8.sp,
+                                                                    fontWeight = FontWeight.Bold
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                                    Text(
+                                                        text = ticket.title,
+                                                        color = TextPrimary,
+                                                        fontWeight = FontWeight.Bold,
+                                                        style = MaterialTheme.typography.bodyMedium
+                                                    )
+
+                                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                                    Text(
+                                                        text = ticket.description,
+                                                        color = TextSecondary,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        fontSize = 11.sp
+                                                    )
+
+                                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = "Ticket ID: #${ticket.id}",
+                                                            color = TextMuted,
+                                                            fontSize = 9.sp,
+                                                            style = MaterialTheme.typography.bodySmall
+                                                        )
+                                                        Text(
+                                                            text = ticket.timestamp,
+                                                            color = TextMuted,
+                                                            fontSize = 9.sp,
+                                                            style = MaterialTheme.typography.bodySmall
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Button(
+                                onClick = { showContactTicketsDialog = false },
+                                colors = ButtonDefaults.buttonColors(containerColor = SurfaceGlassElevated, contentColor = TextPrimary),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Close Portal Panel", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -6432,124 +8118,54 @@ fun ExploreScreen(viewModel: DiamondsViewModel) {
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Travel Destinations Imagery List
         item {
             Spacer(modifier = Modifier.height(16.dp))
-            // Traveler welcome header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Benvenuto, ${loggedInUser?.name ?: "Marco"}! 🇮🇹",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = "Explore the elite wonders of the Amalfi Coast",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(45.dp)
-                        .clip(CircleShape)
-                        .background(GoldPremium)
-                        .padding(1.5.dp)
-                ) {
-                    Box(
+            Text(
+                "WORLD-FAMOUS DESTINATIONS",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+                letterSpacing = 1.5.sp,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(mockDestinations) { (destName, imageUrl) ->
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(SlateDarkBg),
-                        contentAlignment = Alignment.Center
+                            .width(130.dp)
+                            .height(180.dp)
                     ) {
-                        Text(
-                            text = (loggedInUser?.name ?: "M").take(2).uppercase(),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = GoldPremium
-                        )
-                    }
-                }
-            }
-        }
-
-        // Weather widget (immersion focused)
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, SurfaceGlassElevated),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .background(GoldLight, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.WbSunny,
-                                contentDescription = "Weather",
-                                tint = GoldPremium,
-                                modifier = Modifier.size(28.dp)
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            AsyncImage(
+                                model = imageUrl,
+                                contentDescription = destName,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
+                                        )
+                                    )
+                            )
+                            Text(
+                                text = destName,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(12.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("AMALFI LIVE WEATHER", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                            Text("24°C • Calm Seas", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
-                            Text("Wave heights: 0.2m • Gentle breeze", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                        }
                     }
-                    Text("Perfect Departure\nConditions", style = MaterialTheme.typography.labelSmall, color = StatusLiveGreen, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
                 }
             }
-        }
-
-        // Search Bar & Filter Chips
-        item {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search yacht cruises, helicopter tours...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = TextSecondary) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            searchQuery = ""
-                        }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear Search", tint = TextSecondary)
-                        }
-                    }
-                },
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = GoldPremium,
-                    unfocusedBorderColor = SurfaceGlassElevated,
-                    focusedContainerColor = SurfaceGlass,
-                    unfocusedContainerColor = SurfaceGlass,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("explore_search_bar"),
-                singleLine = true
-            )
         }
 
         // Category Selection
@@ -6889,54 +8505,7 @@ fun ExploreScreen(viewModel: DiamondsViewModel) {
             }
         }
 
-        // Travel Destinations Imagery List
-        item {
-            Text(
-                "WORLD-FAMOUS DESTINATIONS",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextMuted,
-                letterSpacing = 1.5.sp,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(mockDestinations) { (destName, imageUrl) ->
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .width(130.dp)
-                            .height(180.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            AsyncImage(
-                                model = imageUrl,
-                                contentDescription = destName,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
-                                        )
-                                    )
-                            )
-                            Text(
-                                text = destName,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(12.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
+
 
         item {
             Spacer(modifier = Modifier.height(40.dp))
@@ -7505,7 +9074,8 @@ fun DiamondsFloatingAdminMenu(
 ) {
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
     val loggedInUser by viewModel.loggedInUser.collectAsStateWithLifecycle()
-    val isAdmin = loggedInUser?.role == "Manager" || loggedInUser?.role == "Admin"
+    val isAdmin = loggedInUser?.role?.equals("Manager", ignoreCase = true) == true || 
+                  loggedInUser?.role?.equals("Admin", ignoreCase = true) == true
 
     if (!isAdmin) return
 
@@ -7548,7 +9118,7 @@ fun DiamondsFloatingAdminMenu(
                 )
             },
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            modifier = Modifier.fillMaxHeight(0.92f)
+            modifier = Modifier.fillMaxSize()
         ) {
             Box(
                 modifier = Modifier
