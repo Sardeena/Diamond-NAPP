@@ -1085,8 +1085,8 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
                                     phone = regPhone,
                                     securityQuestion = securityQuestionsList[regQuestionIndex],
                                     securityAnswer = regAnswer,
-                                    onSuccess = {
-                                        Toast.makeText(context, "Operator enrolled successfully! Please login.", Toast.LENGTH_LONG).show()
+                                    onSuccess = { msg ->
+                                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                                         screenMode = "login"
                                         email = emailTrim
                                         password = ""
@@ -2442,10 +2442,12 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
         val titleLower = exp.title.lowercase()
         val descLower = exp.description.lowercase()
         return when {
-            titleLower.contains("yacht") || titleLower.contains("cruise") || titleLower.contains("boat") || titleLower.contains("sails") || descLower.contains("yacht") || descLower.contains("boat") -> "Sails & Yachts"
-            titleLower.contains("helicopter") || titleLower.contains("heli") || titleLower.contains("flight") || descLower.contains("helicopter") || descLower.contains("heli") -> "Heli Flights"
-            titleLower.contains("wine") || titleLower.contains("estate") || titleLower.contains("tuscan") || titleLower.contains("safari") || titleLower.contains("quad") || titleLower.contains("vineyard") -> "Land & Estates"
-            else -> "Exclusive Trips"
+            titleLower.contains("speedboat") || titleLower.contains("speed") -> "Speedboats"
+            titleLower.contains("yacht") || titleLower.contains("cruise") || titleLower.contains("boat") || titleLower.contains("sails") || descLower.contains("yacht") || descLower.contains("boat") -> "Boats"
+            titleLower.contains("island") || titleLower.contains("capri") || titleLower.contains("ischia") || titleLower.contains("procida") || descLower.contains("island") -> "Islands"
+            titleLower.contains("limo") || titleLower.contains("chauffeur") || titleLower.contains("transfer") || titleLower.contains("van") || titleLower.contains("car") || titleLower.contains("suv") || descLower.contains("chauffeured") || descLower.contains("transfer") -> "Limosuine"
+            titleLower.contains("hotel") || titleLower.contains("resort") || titleLower.contains("estate") || titleLower.contains("vineyard") || titleLower.contains("villa") || titleLower.contains("stay") || descLower.contains("hotel") || descLower.contains("estate") || descLower.contains("vineyard") -> "Hotels"
+            else -> "Hotels"
         }
     }
 
@@ -2884,7 +2886,7 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Beautiful scrolling category chips
-                val categories = listOf("All", "Sails & Yachts", "Heli Flights", "Land & Estates", "Featured")
+                val categories = listOf("All", "Boats", "Speedboats", "Islands", "Limosuine", "Hotels", "Featured")
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2895,9 +2897,11 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                         val isSelected = selectedCategory == cat
                         val icon = when (cat) {
                             "All" -> "🌍"
-                            "Sails & Yachts" -> "⛵"
-                            "Heli Flights" -> "🚁"
-                            "Land & Estates" -> "🍇"
+                            "Boats" -> "⛵"
+                            "Speedboats" -> "🚤"
+                            "Islands" -> "🏝️"
+                            "Limosuine" -> "🚗"
+                            "Hotels" -> "🏨"
                             "Featured" -> "✨"
                             else -> "✨"
                         }
@@ -2987,9 +2991,11 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                                 .background(
                                     Brush.linearGradient(
                                         colors = when (categoryName) {
-                                            "Sails & Yachts" -> listOf(Color(0xFFE0F2FE), Color(0xFFBAE6FD))
-                                            "Heli Flights" -> listOf(Color(0xFFFEE2E2), Color(0xFFFECACA))
-                                            "Land & Estates" -> listOf(Color(0xFFFEF3C7), Color(0xFFFDE68A))
+                                            "Boats" -> listOf(Color(0xFFE0F2FE), Color(0xFFBAE6FD))
+                                            "Speedboats" -> listOf(Color(0xFFCFFAFE), Color(0xFF99F6E4))
+                                            "Islands" -> listOf(Color(0xFFDCFCE7), Color(0xFF86EFAC))
+                                            "Limosuine" -> listOf(Color(0xFFF3E8FF), Color(0xFFE9D5FF))
+                                            "Hotels" -> listOf(Color(0xFFFEF3C7), Color(0xFFFDE68A))
                                             else -> listOf(GoldLight, SurfaceGlassElevated)
                                         }
                                     )
@@ -3040,8 +3046,11 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                             // Large icon mapping
                             Icon(
                                 imageVector = when (categoryName) {
-                                    "Sails & Yachts" -> Icons.Default.DirectionsBoat
-                                    "Heli Flights" -> Icons.Default.AirplaneTicket
+                                    "Boats" -> Icons.Default.DirectionsBoat
+                                    "Speedboats" -> Icons.Default.DirectionsBoat
+                                    "Islands" -> Icons.Default.Map
+                                    "Limosuine" -> Icons.Default.DirectionsCar
+                                    "Hotels" -> Icons.Default.Business
                                     else -> Icons.Default.Business
                                 },
                                 contentDescription = categoryName,
@@ -8101,7 +8110,7 @@ fun ExploreScreen(viewModel: DiamondsViewModel) {
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedExpForDetail by remember { mutableStateOf<Experience?>(null) }
 
-    val categories = listOf("All", "Yachts", "Speedboats", "Helicopters", "Wine & Estates")
+    val categories = listOf("All", "Boats", "Speedboats", "Islands", "Limosuine", "Hotels")
 
     // Destinations mock data
     val mockDestinations = listOf(
@@ -8348,37 +8357,7 @@ fun ExploreScreen(viewModel: DiamondsViewModel) {
             }
         }
 
-        // Visual Announcements Boarding Card
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = GoldLight.copy(alpha = 0.4f)),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, GoldLight),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Info, contentDescription = "Notice", tint = GoldPremium, modifier = Modifier.size(24.dp))
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            "CRUISE TRAVEL UPDATE",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = GoldPremium,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp
-                        )
-                        Text(
-                            "Marina Grande Dock B is open for luxury boarding today. Sea breeze expected; sunset excursions are perfectly scheduled.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextPrimary
-                        )
-                    }
-                }
-            }
-        }
+        // Cruise travel updates card removed as requested
 
         // Coastal Exploration Interactive Map Card
         item {
@@ -8473,10 +8452,11 @@ fun ExploreScreen(viewModel: DiamondsViewModel) {
                                exp.description.lowercase().contains(searchQuery.lowercase())
             val matchesCategory = when (selectedCategory) {
                 "All" -> true
-                "Yachts" -> exp.title.lowercase().contains("yacht") || exp.title.lowercase().contains("cruise")
-                "Speedboats" -> exp.title.lowercase().contains("speedboat") || exp.title.lowercase().contains("boat")
-                "Helicopters" -> exp.title.lowercase().contains("helicopter") || exp.title.lowercase().contains("heli")
-                "Wine & Estates" -> exp.title.lowercase().contains("vineyard") || exp.title.lowercase().contains("estate") || exp.title.lowercase().contains("wine")
+                "Boats" -> exp.title.lowercase().contains("yacht") || exp.title.lowercase().contains("cruise") || exp.title.lowercase().contains("boat") || exp.title.lowercase().contains("sails") || exp.title.lowercase().contains("vessel")
+                "Speedboats" -> exp.title.lowercase().contains("speedboat") || exp.title.lowercase().contains("speed")
+                "Islands" -> exp.title.lowercase().contains("island") || exp.title.lowercase().contains("capri") || exp.title.lowercase().contains("ischia") || exp.title.lowercase().contains("procida") || exp.description.lowercase().contains("island")
+                "Limosuine" -> exp.title.lowercase().contains("limo") || exp.title.lowercase().contains("chauffeur") || exp.title.lowercase().contains("transfer") || exp.title.lowercase().contains("van") || exp.title.lowercase().contains("car") || exp.title.lowercase().contains("suv") || exp.description.lowercase().contains("chauffeured") || exp.description.lowercase().contains("transfer")
+                "Hotels" -> exp.title.lowercase().contains("hotel") || exp.title.lowercase().contains("resort") || exp.title.lowercase().contains("estate") || exp.title.lowercase().contains("vineyard") || exp.title.lowercase().contains("villa") || exp.title.lowercase().contains("stay") || exp.description.lowercase().contains("hotel") || exp.description.lowercase().contains("estate") || exp.description.lowercase().contains("vineyard")
                 else -> true
             }
             matchesSearch && matchesCategory

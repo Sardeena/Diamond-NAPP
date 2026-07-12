@@ -320,7 +320,124 @@ class SupabaseService {
                   .replace("\r", "\\r")
                   .replace("\t", "\\t")
     }
+
+    /**
+     * Signs up a user in Supabase Auth.
+     */
+    suspend fun signUp(email: String, password: String): AuthResult = withContext(Dispatchers.IO) {
+        if (!isConfigured()) {
+            return@withContext AuthResult(false, "Supabase is not configured yet.")
+        }
+        val url = BuildConfig.SUPABASE_URL.removeSuffix("/")
+        val key = BuildConfig.SUPABASE_KEY
+
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val json = """
+            {
+              "email": "${escapeJson(email)}",
+              "password": "${escapeJson(password)}"
+            }
+        """.trimIndent()
+
+        val requestBody = json.toRequestBody(mediaType)
+        val request = Request.Builder()
+            .url("$url/auth/v1/signup")
+            .post(requestBody)
+            .addHeader("apikey", key)
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                val code = response.code
+                val responseBody = response.body?.string() ?: ""
+                if (response.isSuccessful || code == 200 || code == 201) {
+                    AuthResult(true, "Enrolled successfully! A confirmation link has been sent to your email from Supabase. Please confirm your account to log in.")
+                } else {
+                    Log.e("SupabaseService", "Sign up failed: $code - $responseBody")
+                    val errMsg = parseSupabaseError(responseBody) ?: "Registration failed ($code)"
+                    AuthResult(false, errMsg)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseService", "Sign up exception", e)
+            AuthResult(false, "Network error during registration: ${e.localizedMessage}")
+        }
+    }
+
+    /**
+     * Signs in a user in Supabase Auth to verify credentials and check confirmation.
+     */
+    suspend fun signIn(email: String, password: String): AuthResult = withContext(Dispatchers.IO) {
+        if (!isConfigured()) {
+            return@withContext AuthResult(false, "Supabase is not configured yet.")
+        }
+        val url = BuildConfig.SUPABASE_URL.removeSuffix("/")
+        val key = BuildConfig.SUPABASE_KEY
+
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val json = """
+            {
+              "email": "${escapeJson(email)}",
+              "password": "${escapeJson(password)}"
+            }
+        """.trimIndent()
+
+        val requestBody = json.toRequestBody(mediaType)
+        val request = Request.Builder()
+            .url("$url/auth/v1/token?grant_type=password")
+            .post(requestBody)
+            .addHeader("apikey", key)
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                val code = response.code
+                val responseBody = response.body?.string() ?: ""
+                if (response.isSuccessful || code == 200 || code == 201) {
+                    AuthResult(true, "Success")
+                } else {
+                    Log.e("SupabaseService", "Sign in failed: $code - $responseBody")
+                    val errMsg = parseSupabaseError(responseBody) ?: "Invalid credentials"
+                    if (errMsg.lowercase().contains("confirm") || errMsg.lowercase().contains("verified")) {
+                        AuthResult(false, "Email not confirmed. Please check your inbox and click the verification link sent by Supabase.")
+                    } else {
+                        AuthResult(false, errMsg)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseService", "Sign in exception", e)
+            AuthResult(false, "Network error: ${e.localizedMessage}")
+        }
+    }
+
+    private fun parseSupabaseError(json: String): String? {
+        try {
+            val descPattern = "\"error_description\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+            val msgPattern = "\"msg\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+            val messagePattern = "\"message\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+            
+            val descMatch = descPattern.find(json)?.groupValues?.get(1)
+            if (descMatch != null) return descMatch
+            
+            val msgMatch = msgPattern.find(json)?.groupValues?.get(1)
+            if (msgMatch != null) return msgMatch
+
+            val messageMatch = messagePattern.find(json)?.groupValues?.get(1)
+            if (messageMatch != null) return messageMatch
+        } catch (e: Exception) {
+            // ignore
+        }
+        return null
+    }
 }
+
+data class AuthResult(
+    val success: Boolean,
+    val message: String
+)
 
 data class SyncReport(
     val success: Boolean,

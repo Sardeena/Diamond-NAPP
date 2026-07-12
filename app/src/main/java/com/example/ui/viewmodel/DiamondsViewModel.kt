@@ -514,11 +514,42 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
     ) {
         viewModelScope.launch {
             val trimmedEmail = email.trim()
+
+            if (isSupabaseConfigured()) {
+                val authResult = supabaseService.signIn(trimmedEmail, passwordHash)
+                if (!authResult.success) {
+                    addSecurityLog("LOGIN_FAILURE", "Supabase authentication failed for $trimmedEmail: ${authResult.message}")
+                    onFailure(authResult.message)
+                    return@launch
+                }
+            }
+
             val match = staff.value.firstOrNull { it.email.equals(trimmedEmail, ignoreCase = true) }
             
             if (match == null) {
-                addSecurityLog("LOGIN_FAILURE", "Failed login attempt for unknown email: $trimmedEmail")
-                onFailure("No account registered with this email.")
+                if (isSupabaseConfigured()) {
+                    // Automatically provision a local account on first login since Supabase authenticated successfully
+                    val newStaff = Staff(
+                        name = trimmedEmail.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() },
+                        role = "Guide",
+                        phoneNumber = "+39 000 0000",
+                        attendanceStatus = "Present",
+                        rating = 5.0f,
+                        performanceScore = 100,
+                        certificateUrl = "Enrolled via Supabase Auth",
+                        email = trimmedEmail,
+                        passwordHash = passwordHash,
+                        securityQuestion = "Auto-created",
+                        securityAnswer = "supabase",
+                        isTwoFactorEnabled = false
+                    )
+                    repository.insertStaff(newStaff)
+                    completeLogin(newStaff)
+                    onSuccess(newStaff)
+                } else {
+                    addSecurityLog("LOGIN_FAILURE", "Failed login attempt for unknown email: $trimmedEmail")
+                    onFailure("No account registered with this email.")
+                }
                 return@launch
             }
 
@@ -528,7 +559,7 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
                 return@launch
             }
 
-            if (match.passwordHash != passwordHash) {
+            if (!isSupabaseConfigured() && match.passwordHash != passwordHash) {
                 val newAttempts = match.loginAttempts + 1
                 val isNowLocked = newAttempts >= 3
                 val updatedStaff = match.copy(loginAttempts = newAttempts, isLocked = isNowLocked)
@@ -579,7 +610,7 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
         phone: String,
         securityQuestion: String,
         securityAnswer: String,
-        onSuccess: () -> Unit,
+        onSuccess: (String) -> Unit,
         onFailure: (String) -> Unit
     ) {
         viewModelScope.launch {
@@ -587,6 +618,16 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
             if (staff.value.any { it.email.equals(trimmedEmail, ignoreCase = true) }) {
                 onFailure("An account with this email already exists.")
                 return@launch
+            }
+
+            var successMsg = "Operator enrolled successfully! Please login."
+            if (isSupabaseConfigured()) {
+                val signUpResult = supabaseService.signUp(trimmedEmail, passwordHash)
+                if (!signUpResult.success) {
+                    onFailure(signUpResult.message)
+                    return@launch
+                }
+                successMsg = signUpResult.message
             }
 
             val newStaff = Staff(
@@ -606,7 +647,7 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
 
             repository.insertStaff(newStaff)
             addSecurityLog("REGISTRATION", "New operator ${name} enrolled as ${role} (${trimmedEmail}).")
-            onSuccess()
+            onSuccess(successMsg)
         }
     }
 
