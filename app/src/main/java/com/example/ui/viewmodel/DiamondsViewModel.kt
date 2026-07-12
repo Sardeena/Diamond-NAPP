@@ -1,11 +1,21 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import com.example.MainActivity
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -68,9 +78,165 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
     private val _notifications = MutableStateFlow<List<NotificationItem>>(emptyList())
     val notifications = _notifications.asStateFlow()
 
+    private val notificationManager = getApplication<Application>().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
     init {
+        createNotificationChannel()
         seedInitialDataIfNeeded()
         generateLiveNotifications()
+        startSimulatedPushNotifications()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channelId = "excursion_alerts"
+            val channelName = "Excursion Alerts"
+            val channelDescription = "Alerts about incoming booking requests or status changes for pending excursions"
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel(channelId, channelName, importance).apply {
+                description = channelDescription
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun startSimulatedPushNotifications() {
+        viewModelScope.launch {
+            // Initial delay to let the app settle
+            delay(15000)
+            while (true) {
+                // Periodically trigger simulated push notification (every 40 seconds)
+                delay(40000)
+                if (isLoggedIn.value) { // Only notify if operator is logged in
+                    triggerSimulatedPushNotification()
+                }
+            }
+        }
+    }
+
+    fun triggerSystemNotification(title: String, message: String) {
+        val channelId = "excursion_alerts"
+        val context = getApplication<Application>()
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            System.currentTimeMillis().toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        try {
+            NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), notification)
+        } catch (e: SecurityException) {
+            e.printStackTrace()
+        }
+    }
+
+    fun triggerSimulatedPushNotification() {
+        viewModelScope.launch {
+            val random = Random()
+            val decision = random.nextInt(2)
+            if (decision == 0 || bookings.value.none { it.status == "Pending" }) {
+                // Generate a new booking request!
+                val randomNames = listOf("Emma Watson", "Christian Bale", "Scarlett Johansson", "Robert Downey Jr.", "Margot Robbie", "Leonardo DiCaprio")
+                val randomTours = listOf("Sunset Champagne Yacht Cruise", "Amalfi Coast Speedboat Tour", "Volcanic Helicopter Heli-Excursion")
+                val randomTimes = listOf("09:00 - 13:00", "14:00 - 18:00", "18:30 - 22:30")
+                
+                val name = randomNames[random.nextInt(randomNames.size)]
+                val tourTitle = randomTours[random.nextInt(randomTours.size)]
+                val time = randomTimes[random.nextInt(randomTimes.size)]
+                val price = when(tourTitle) {
+                    "Sunset Champagne Yacht Cruise" -> 2500.0
+                    "Amalfi Coast Speedboat Tour" -> 1800.0
+                    "Volcanic Helicopter Heli-Excursion" -> 5500.0
+                    else -> 1200.0
+                }
+
+                // Add customer
+                val customer = Customer(
+                    fullName = name,
+                    phoneNumber = "+39 333 ${random.nextInt(9000000) + 1000000}",
+                    vipStatus = random.nextBoolean(),
+                    emergencyContact = "+39 347 ${random.nextInt(9000000) + 1000000}",
+                    pickupHotel = "Hotel Sirenuse, Positano",
+                    roomNumber = (random.nextInt(300) + 100).toString(),
+                    language = "English",
+                    passportNumber = "IT${random.nextInt(900000) + 100000}X",
+                    nationality = "Italian"
+                )
+                repository.insertCustomer(customer)
+                
+                // Fetch the customer id or fallback to random/default
+                delay(200)
+                val customerId = customers.value.firstOrNull { it.fullName == name }?.id ?: 1
+
+                val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val calendar = Calendar.getInstance()
+                calendar.add(Calendar.DATE, random.nextInt(5) + 1)
+                val futureDateStr = sdf.format(calendar.time)
+
+                val newBooking = Booking(
+                    customerId = customerId,
+                    customerName = name,
+                    experienceId = random.nextInt(3) + 1,
+                    experienceTitle = tourTitle,
+                    date = futureDateStr,
+                    timeSlot = time,
+                    revenue = price,
+                    status = "Pending",
+                    ticketQrCode = "TICKET-" + UUID.randomUUID().toString().take(8),
+                    staffId = 1,
+                    vehicleId = 1,
+                    notes = "Real-time incoming online booking request. Awaiting verification."
+                )
+                
+                repository.insertBooking(newBooking)
+                
+                val notifTitle = "New Booking Request Received"
+                val notifDesc = "$name requested booking for '$tourTitle' on $futureDateStr."
+                addNotification(
+                    title = notifTitle,
+                    description = notifDesc,
+                    type = "Booking"
+                )
+                triggerSystemNotification(notifTitle, notifDesc)
+            } else {
+                // Change status of an existing pending excursion
+                val pendingBookings = bookings.value.filter { it.status == "Pending" }
+                if (pendingBookings.isNotEmpty()) {
+                    val target = pendingBookings[random.nextInt(pendingBookings.size)]
+                    val possibleStatuses = listOf("Confirmed", "Cancelled")
+                    val newStatus = possibleStatuses[random.nextInt(possibleStatuses.size)]
+                    
+                    repository.updateBookingStatus(target.id, newStatus)
+                    
+                    val notifTitle = "Excursion Status Automatically Changed"
+                    val notifDesc = "Pending booking for ${target.customerName} on ${target.date} was updated to $newStatus."
+                    addNotification(
+                        title = notifTitle,
+                        description = notifDesc,
+                        type = "Booking"
+                    )
+                    triggerSystemNotification(notifTitle, notifDesc)
+                }
+            }
+        }
+    }
+
+    fun clearAllNotifications() {
+        _notifications.value = emptyList()
     }
 
     private fun seedInitialDataIfNeeded() {
@@ -376,9 +542,26 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
     fun updateBookingStatus(bookingId: Int, status: String) {
         viewModelScope.launch {
             repository.updateBookingStatus(bookingId, status)
+            val booking = bookings.value.firstOrNull { it.id == bookingId }
+            val guestName = booking?.customerName ?: "Guest"
+            val tourTitle = booking?.experienceTitle ?: "Excursion"
+            val notifTitle = "Booking Status Updated"
+            val notifDesc = "$guestName's booking for '$tourTitle' is now $status."
             addNotification(
-                title = "Booking Status Updated",
-                description = "Booking ID #$bookingId status changed to $status.",
+                title = notifTitle,
+                description = notifDesc,
+                type = "Booking"
+            )
+            triggerSystemNotification(notifTitle, notifDesc)
+        }
+    }
+
+    fun deleteBooking(booking: Booking) {
+        viewModelScope.launch {
+            repository.deleteBooking(booking)
+            addNotification(
+                title = "Booking Deleted",
+                description = "Booking ID #${booking.id} for ${booking.customerName} has been deleted/archived.",
                 type = "Booking"
             )
         }

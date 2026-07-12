@@ -1,6 +1,8 @@
 package com.example
 
 import android.os.Bundle
+import android.os.Build
+import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -76,6 +78,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        // Request runtime permission for notifications on Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val permission = "android.permission.POST_NOTIFICATIONS"
+            if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(permission), 101)
+            }
+        }
+
         setContent {
             MyApplicationTheme(darkTheme = false, dynamicColor = false) {
                 DiamondsApp()
@@ -100,12 +111,23 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
     var showAddVehicleDialog by remember { mutableStateOf(false) }
     var showAddStaffDialog by remember { mutableStateOf(false) }
 
-    if (!isLoggedIn) {
-        LoginScreen(viewModel = viewModel)
-    } else {
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
+    AnimatedContent(
+        targetState = isLoggedIn,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(500, easing = FastOutSlowInEasing)) +
+             scaleIn(initialScale = 1.02f, animationSpec = tween(500, easing = FastOutSlowInEasing))) togetherWith
+            (fadeOut(animationSpec = tween(400, easing = FastOutSlowInEasing)) +
+             scaleOut(targetScale = 0.98f, animationSpec = tween(400, easing = FastOutSlowInEasing)))
+        },
+        label = "login_transition",
+        modifier = Modifier.fillMaxSize()
+    ) { loggedIn ->
+        if (!loggedIn) {
+            LoginScreen(viewModel = viewModel)
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
             var isAdminFabVisible by remember { mutableStateOf(true) }
             val nestedScrollConnection = remember {
                 object : NestedScrollConnection {
@@ -297,14 +319,15 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
                     val loggedInUser by viewModel.loggedInUser.collectAsStateWithLifecycle()
                     val isAdmin = loggedInUser?.role?.equals("Manager", ignoreCase = true) == true || 
                                   loggedInUser?.role?.equals("Admin", ignoreCase = true) == true
-                    val showAddFab = isAdmin && when (currentScreen) {
+                    val showAddFab = (isAdmin && when (currentScreen) {
                         "experiences", "customers", "fleet", "staff" -> true
                         else -> false
-                    }
+                    }) || currentScreen == "dashboard"
                     if (showAddFab) {
                         FloatingActionButton(
                             onClick = {
                                 when (currentScreen) {
+                                    "dashboard" -> showAddBookingSheet = true
                                     "experiences" -> showAddExperienceDialog = true
                                     "customers" -> showAddCustomerDialog = true
                                     "fleet" -> showAddVehicleDialog = true
@@ -313,7 +336,7 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
                                 }
                             },
                             containerColor = GoldPremium,
-                            contentColor = Color.White,
+                            contentColor = SlateDarkBg,
                             shape = CircleShape,
                             modifier = Modifier.testTag("global_fab")
                         ) {
@@ -399,6 +422,7 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
     }
 }
 }
+}
 
 // ==========================================
 // 1. AUTHENTICATION & LOGIN SCREEN
@@ -409,7 +433,7 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
 @Composable
 fun LoginScreen(viewModel: DiamondsViewModel) {
     val context = LocalContext.current
-    var screenMode by remember { mutableStateOf("login") } // login, register, forgot, mfa, legacy
+    var screenMode by remember { mutableStateOf("login") } // login, register, forgot, mfa
     val activeTenant by viewModel.loginCompanyCode.collectAsStateWithLifecycle()
     var showTenantSelector by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -451,11 +475,6 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
     var mfaError by remember { mutableStateOf("") }
     var pendingUser2Fa by remember { mutableStateOf<Staff?>(null) }
     var showBiometricDemo by remember { mutableStateOf(false) }
-
-    // Legacy Login fields (retained for backward compatibility)
-    var legacyCompanyCode by remember { mutableStateOf("DIAMOND_EXCLUSIVE_YACHTS") }
-    var legacyPinCode by remember { mutableStateOf("") }
-    var legacyRole by remember { mutableStateOf("Manager") }
 
     // Password strength check
     val isMinLength = regPassword.length >= 6
@@ -558,68 +577,10 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Active Secure Schema Card (Multi-Tenant Lookup Handshake)
-            Card(
-                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.25f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-                    .clickable { showTenantSelector = true }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CloudDone,
-                            contentDescription = "Active Tenant",
-                            tint = GoldPremium,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "ACTIVE SECURE SCHEMA",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextMuted,
-                                fontSize = 9.sp,
-                                letterSpacing = 1.sp
-                            )
-                            Text(
-                                text = activeTenant,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextPrimary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "SWITCH",
-                            color = GoldPremium,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.labelSmall,
-                            letterSpacing = 1.sp
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.SwapHoriz,
-                            contentDescription = "Switch Tenant",
-                            tint = GoldPremium,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
+
 
             // Tab switching indicators
-            if (screenMode != "mfa") {
+            if (screenMode != "mfa" && screenMode != "forgot") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -630,8 +591,7 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
                 ) {
                     listOf(
                         Triple("login", "SIGN IN", Icons.Default.Lock),
-                        Triple("register", "REGISTER", Icons.Default.Person),
-                        Triple("legacy", "LEGACY DEV", Icons.Default.Business)
+                        Triple("register", "REGISTER", Icons.Default.Person)
                     ).forEach { (mode, label, icon) ->
                         val isSelected = screenMode == mode
                         Row(
@@ -670,799 +630,735 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // SCREEN MODES
-            when (screenMode) {
-                "login" -> {
-                    Text(
-                        "OPERATOR SECURE SIGN-IN",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+            // SCREEN MODES WITH PREMIUM TRANSITIONS
+            AnimatedContent(
+                targetState = screenMode,
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing)) + 
+                     scaleIn(initialScale = 0.96f, animationSpec = tween(300, easing = FastOutSlowInEasing))) togetherWith
+                    (fadeOut(animationSpec = tween(200, easing = FastOutSlowInEasing)) + 
+                     scaleOut(targetScale = 0.96f, animationSpec = tween(200, easing = FastOutSlowInEasing)))
+                },
+                label = "auth_screen_modes_transition",
+                modifier = Modifier.fillMaxWidth()
+            ) { targetMode ->
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    when (targetMode) {
+                        "login" -> {
+                            Text(
+                                "OPERATOR SECURE SIGN-IN",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                modifier = Modifier.align(Alignment.Start)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                    if (loginError.isNotEmpty()) {
-                        Text(
-                            text = loginError,
-                            color = Color(0xFFE57373),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
-                        label = { Text("operator@diamonds.com") },
-                        placeholder = { Text("operator@diamonds.com") },
-                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email", tint = GoldPremium) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPremium,
-                            unfocusedBorderColor = SurfaceGlassElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceGlass,
-                            unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("login_email"),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Secure Password / PIN") },
-                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password", tint = GoldPremium) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPremium,
-                            unfocusedBorderColor = SurfaceGlassElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceGlass,
-                            unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("login_password"),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "Forgot password? Use recovery questions",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = GoldPremium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .clickable {
-                                screenMode = "forgot"
-                                hasVerifiedAnswer = false
-                                resetEmail = email
-                                resetError = ""
-                            }
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Button(
-                        onClick = {
-                            if (email.isEmpty() || password.isEmpty()) {
-                                loginError = "Please enter both email and password."
-                            } else {
-                                viewModel.performSecureLogin(
-                                    email = email,
-                                    passwordHash = password,
-                                    onTwoFactorRequired = { staff ->
-                                        pendingUser2Fa = staff
-                                        screenMode = "mfa"
-                                        mfaCode = ""
-                                        mfaError = ""
-                                    },
-                                    onSuccess = {
-                                        Toast.makeText(context, "Logged in as ${it.name}", Toast.LENGTH_SHORT).show()
-                                    },
-                                    onFailure = { err ->
-                                        loginError = err
-                                    }
+                            if (loginError.isNotEmpty()) {
+                                Text(
+                                    text = loginError,
+                                    color = Color(0xFFE57373),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(bottom = 8.dp)
                                 )
                             }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .testTag("submit_login_button"),
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("AUTHENTICATE SESSION", fontWeight = FontWeight.Bold)
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                            OutlinedTextField(
+                                value = email,
+                                onValueChange = { email = it },
+                                label = { Text("operator@diamonds.com") },
+                                placeholder = { Text("operator@diamonds.com") },
+                                leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email", tint = GoldPremium) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldPremium,
+                                    unfocusedBorderColor = SurfaceGlassElevated,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedContainerColor = SurfaceGlass,
+                                    unfocusedContainerColor = SurfaceGlass
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("login_email"),
+                                singleLine = true
+                            )
 
-                    // Biometric alternative login
-                    OutlinedButton(
-                        onClick = { showBiometricDemo = true },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.5f)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldPremium),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Fingerprint, contentDescription = "Fingerprint")
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text("FACIAL / BIOMETRIC ID", fontWeight = FontWeight.Bold)
-                    }
-                }
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                "register" -> {
-                    Text(
-                        "ENROLL NEW DIAMONDS OPERATOR",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = password,
+                                onValueChange = { password = it },
+                                label = { Text("Secure Password / PIN") },
+                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password", tint = GoldPremium) },
+                                visualTransformation = PasswordVisualTransformation(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldPremium,
+                                    unfocusedBorderColor = SurfaceGlassElevated,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedContainerColor = SurfaceGlass,
+                                    unfocusedContainerColor = SurfaceGlass
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("login_password"),
+                                singleLine = true
+                            )
 
-                    if (regError.isNotEmpty()) {
-                        Text(
-                            text = regError,
-                            color = Color(0xFFE57373),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                    OutlinedTextField(
-                        value = regName,
-                        onValueChange = { regName = it },
-                        label = { Text("Full Name") },
-                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Name", tint = GoldPremium) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPremium,
-                            unfocusedBorderColor = SurfaceGlassElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceGlass,
-                            unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("reg_name"),
-                        singleLine = true
-                    )
+                            Text(
+                                text = "Forgot password? Use recovery questions",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = GoldPremium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .align(Alignment.End)
+                                    .clickable {
+                                        screenMode = "forgot"
+                                        hasVerifiedAnswer = false
+                                        resetEmail = email
+                                        resetError = ""
+                                    }
+                            )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(24.dp))
 
-                    OutlinedTextField(
-                        value = regEmail,
-                        onValueChange = { regEmail = it },
-                        label = { Text("Corporate Email Address") },
-                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email", tint = GoldPremium) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPremium,
-                            unfocusedBorderColor = SurfaceGlassElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceGlass,
-                            unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("reg_email"),
-                        singleLine = true
-                    )
+                            Button(
+                                onClick = {
+                                    if (email.isEmpty() || password.isEmpty()) {
+                                        loginError = "Please enter both email and password."
+                                    } else {
+                                        viewModel.performSecureLogin(
+                                            email = email,
+                                            passwordHash = password,
+                                            onTwoFactorRequired = { staff ->
+                                                pendingUser2Fa = staff
+                                                screenMode = "mfa"
+                                                mfaCode = ""
+                                                mfaError = ""
+                                            },
+                                            onSuccess = {
+                                                Toast.makeText(context, "Logged in as ${it.name}", Toast.LENGTH_SHORT).show()
+                                            },
+                                            onFailure = { err ->
+                                                loginError = err
+                                            }
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .testTag("submit_login_button"),
+                                colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("AUTHENTICATE SESSION", fontWeight = FontWeight.Bold)
+                            }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                    OutlinedTextField(
-                        value = regPassword,
-                        onValueChange = { regPassword = it },
-                        label = { Text("Secure Password") },
-                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password", tint = GoldPremium) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPremium,
-                            unfocusedBorderColor = SurfaceGlassElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceGlass,
-                            unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("reg_password"),
-                        singleLine = true
-                    )
+                            // Biometric alternative login
+                            OutlinedButton(
+                                onClick = { showBiometricDemo = true },
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.5f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldPremium),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Fingerprint, contentDescription = "Fingerprint")
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text("FACIAL / BIOMETRIC ID", fontWeight = FontWeight.Bold)
+                            }
+                        }
 
-                    // Real-time password strength advisor
-                    if (regPassword.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                        "register" -> {
+                            Text(
+                                "ENROLL NEW DIAMONDS OPERATOR",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                modifier = Modifier.align(Alignment.Start)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            if (regError.isNotEmpty()) {
+                                Text(
+                                    text = regError,
+                                    color = Color(0xFFE57373),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = regName,
+                                onValueChange = { regName = it },
+                                label = { Text("Full Name") },
+                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Name", tint = GoldPremium) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldPremium,
+                                    unfocusedBorderColor = SurfaceGlassElevated,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedContainerColor = SurfaceGlass,
+                                    unfocusedContainerColor = SurfaceGlass
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("reg_name"),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = regEmail,
+                                onValueChange = { regEmail = it },
+                                label = { Text("Corporate Email Address") },
+                                leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email", tint = GoldPremium) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldPremium,
+                                    unfocusedBorderColor = SurfaceGlassElevated,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedContainerColor = SurfaceGlass,
+                                    unfocusedContainerColor = SurfaceGlass
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("reg_email"),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = regPassword,
+                                onValueChange = { regPassword = it },
+                                label = { Text("Secure Password") },
+                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password", tint = GoldPremium) },
+                                visualTransformation = PasswordVisualTransformation(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldPremium,
+                                    unfocusedBorderColor = SurfaceGlassElevated,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedContainerColor = SurfaceGlass,
+                                    unfocusedContainerColor = SurfaceGlass
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("reg_password"),
+                                singleLine = true
+                            )
+
+                            // Real-time password strength advisor
+                            if (regPassword.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            "Password Strength:",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextMuted,
+                                            fontSize = 11.sp
+                                        )
+                                        Text(
+                                            text = when {
+                                                passwordStrength < 0.4f -> "Weak"
+                                                passwordStrength < 0.7f -> "Medium"
+                                                else -> "Strong (Excellent)"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = when {
+                                                passwordStrength < 0.4f -> Color(0xFFEF5350)
+                                                passwordStrength < 0.7f -> Color(0xFFFFB74D)
+                                                else -> Color(0xFF66BB6A)
+                                            },
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    LinearProgressIndicator(
+                                        progress = { passwordStrength },
+                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.2.dp)),
+                                        color = when {
+                                            passwordStrength < 0.4f -> Color(0xFFEF5350)
+                                            passwordStrength < 0.7f -> Color(0xFFFFB74D)
+                                            else -> Color(0xFF66BB6A)
+                                        },
+                                        trackColor = SurfaceGlassElevated,
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        val checks = listOf(
+                                            Pair(isMinLength, "6+ chars"),
+                                            Pair(hasDigit, "1+ digit"),
+                                            Pair(hasLetter, "1+ letter")
+                                        )
+                                        checks.forEach { (isOk, title) ->
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = if (isOk) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                                                    contentDescription = null,
+                                                    tint = if (isOk) Color(0xFF66BB6A) else Color(0xFFEF5350),
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(title, fontSize = 10.sp, color = if (isOk) TextPrimary else TextMuted)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = regConfirmPassword,
+                                onValueChange = { regConfirmPassword = it },
+                                label = { Text("Confirm Password") },
+                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Confirm Password", tint = GoldPremium) },
+                                visualTransformation = PasswordVisualTransformation(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldPremium,
+                                    unfocusedBorderColor = SurfaceGlassElevated,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedContainerColor = SurfaceGlass,
+                                    unfocusedContainerColor = SurfaceGlass
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("reg_confirm_password"),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Role Picker
+                            Text("Assigned Domain Role:", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                            Spacer(modifier = Modifier.height(6.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
-                                    "Password Strength:",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextMuted,
-                                    fontSize = 11.sp
-                                )
-                                Text(
-                                    text = when {
-                                        passwordStrength < 0.4f -> "Weak"
-                                        passwordStrength < 0.7f -> "Medium"
-                                        else -> "Strong (Excellent)"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = when {
-                                        passwordStrength < 0.4f -> Color(0xFFEF5350)
-                                        passwordStrength < 0.7f -> Color(0xFFFFB74D)
-                                        else -> Color(0xFF66BB6A)
-                                    },
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
+                                listOf("Manager", "Boat Captain", "Guide", "Driver").forEach { role ->
+                                    val isSel = regRole == role
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .border(1.dp, if (isSel) GoldPremium else SurfaceGlassElevated, RoundedCornerShape(8.dp))
+                                            .background(if (isSel) GoldPremium.copy(alpha = 0.15f) else SurfaceGlass)
+                                            .clickable { regRole = role }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = role.replace("Boat ", ""),
+                                            color = if (isSel) GoldPremium else TextSecondary,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
                             }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = regPhone,
+                                onValueChange = { regPhone = it },
+                                label = { Text("Contact Number") },
+                                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = "Phone", tint = GoldPremium) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldPremium,
+                                    unfocusedBorderColor = SurfaceGlassElevated,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedContainerColor = SurfaceGlass,
+                                    unfocusedContainerColor = SurfaceGlass
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("reg_phone"),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Security Question configuration
+                            Text("Password Recovery Setup:", style = MaterialTheme.typography.bodySmall, color = GoldPremium, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(4.dp))
-                            LinearProgressIndicator(
-                                progress = { passwordStrength },
-                                modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.2.dp)),
-                                color = when {
-                                    passwordStrength < 0.4f -> Color(0xFFEF5350)
-                                    passwordStrength < 0.7f -> Color(0xFFFFB74D)
-                                    else -> Color(0xFF66BB6A)
-                                },
-                                trackColor = SurfaceGlassElevated,
+                            Text(
+                                "Used for emergency reset in case of locking.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted,
+                                fontSize = 11.sp
                             )
                             Spacer(modifier = Modifier.height(6.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                val checks = listOf(
-                                    Pair(isMinLength, "6+ chars"),
-                                    Pair(hasDigit, "1+ digit"),
-                                    Pair(hasLetter, "1+ letter")
-                                )
-                                checks.forEach { (isOk, title) ->
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = if (isOk) Icons.Default.CheckCircle else Icons.Default.Cancel,
-                                            contentDescription = null,
-                                            tint = if (isOk) Color(0xFF66BB6A) else Color(0xFFEF5350),
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(title, fontSize = 10.sp, color = if (isOk) TextPrimary else TextMuted)
-                                    }
-                                }
-                            }
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = regConfirmPassword,
-                        onValueChange = { regConfirmPassword = it },
-                        label = { Text("Confirm Password") },
-                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Confirm Password", tint = GoldPremium) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPremium,
-                            unfocusedBorderColor = SurfaceGlassElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceGlass,
-                            unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("reg_confirm_password"),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Role Picker
-                    Text("Assigned Domain Role:", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf("Manager", "Boat Captain", "Guide", "Driver").forEach { role ->
-                            val isSel = regRole == role
+                            // Mini Dropdown simulation for recovery question
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
+                                    .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
-                                    .border(1.dp, if (isSel) GoldPremium else SurfaceGlassElevated, RoundedCornerShape(8.dp))
-                                    .background(if (isSel) GoldPremium.copy(alpha = 0.15f) else SurfaceGlass)
-                                    .clickable { regRole = role }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = role.replace("Boat ", ""),
-                                    color = if (isSel) GoldPremium else TextSecondary,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = regPhone,
-                        onValueChange = { regPhone = it },
-                        label = { Text("Contact Number") },
-                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = "Phone", tint = GoldPremium) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPremium,
-                            unfocusedBorderColor = SurfaceGlassElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceGlass,
-                            unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("reg_phone"),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Security Question configuration
-                    Text("Password Recovery Setup:", style = MaterialTheme.typography.bodySmall, color = GoldPremium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Used for emergency reset in case of locking.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted,
-                        fontSize = 11.sp
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Mini Dropdown simulation for recovery question
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SurfaceGlass)
-                            .border(1.dp, SurfaceGlassElevated, RoundedCornerShape(8.dp))
-                            .clickable {
-                                regQuestionIndex = (regQuestionIndex + 1) % securityQuestionsList.size
-                            }
-                            .padding(14.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = securityQuestionsList[regQuestionIndex],
-                                color = TextPrimary,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Select question", tint = GoldPremium)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = regAnswer,
-                        onValueChange = { regAnswer = it },
-                        label = { Text("Recovery Answer") },
-                        leadingIcon = { Icon(Icons.Default.Help, contentDescription = "Answer", tint = GoldPremium) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPremium,
-                            unfocusedBorderColor = SurfaceGlassElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceGlass,
-                            unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("reg_answer"),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Button(
-                        onClick = {
-                            val emailTrim = regEmail.trim()
-                            if (regName.isEmpty() || emailTrim.isEmpty() || regPassword.isEmpty() || regAnswer.isEmpty()) {
-                                regError = "Please fill in all mandatory enrollment fields."
-                            } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(emailTrim).matches()) {
-                                regError = "Please enter a valid company email address."
-                            } else if (regPassword != regConfirmPassword) {
-                                regError = "Passwords do not match."
-                            } else if (passwordStrength < 0.6f) {
-                                regError = "Password too weak. Please include letters and numbers."
-                            } else {
-                                viewModel.registerSecureUser(
-                                    name = regName,
-                                    email = emailTrim,
-                                    passwordHash = regPassword,
-                                    role = regRole,
-                                    phone = regPhone,
-                                    securityQuestion = securityQuestionsList[regQuestionIndex],
-                                    securityAnswer = regAnswer,
-                                    onSuccess = { msg ->
-                                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                                        screenMode = "login"
-                                        email = emailTrim
-                                        password = ""
-                                    },
-                                    onFailure = { err ->
-                                        regError = err
+                                    .background(SurfaceGlass)
+                                    .border(1.dp, SurfaceGlassElevated, RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        regQuestionIndex = (regQuestionIndex + 1) % securityQuestionsList.size
                                     }
-                                )
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .testTag("submit_register_button"),
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("ENROLL OPERATOR", fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                "forgot" -> {
-                    Text(
-                        "SECURE PASSWORD RECOVERY",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (resetError.isNotEmpty()) {
-                        Text(
-                            text = resetError,
-                            color = Color(0xFFE57373),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
-
-                    if (!hasVerifiedAnswer) {
-                        // Stage 1: Verify identity
-                        Text(
-                            "Provide your registered operator email to verify credentials and unlock security question.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-
-                        OutlinedTextField(
-                            value = resetEmail,
-                            onValueChange = { resetEmail = it },
-                            label = { Text("Operator Email Address") },
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email", tint = GoldPremium) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = GoldPremium,
-                                unfocusedBorderColor = SurfaceGlassElevated,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedContainerColor = SurfaceGlass,
-                                unfocusedContainerColor = SurfaceGlass
-                            ),
-                            modifier = Modifier.fillMaxWidth().testTag("reset_email"),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Button(
-                            onClick = {
-                                val trimmedEmail = resetEmail.trim()
-                                val match = viewModel.staff.value.firstOrNull { it.email.equals(trimmedEmail, ignoreCase = true) }
-                                if (match != null) {
-                                    resetQuestion = match.securityQuestion
-                                    hasVerifiedAnswer = true
-                                    resetError = ""
-                                } else {
-                                    resetError = "No operator account found with that email address."
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("LOAD RECOVERY PROTOCOL", fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                        // Stage 2: Recover
-                        Text(
-                            "Recovery protocol loaded for $resetEmail.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF81C784),
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text("SECURITY QUESTION", style = MaterialTheme.typography.labelSmall, color = GoldPremium)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(resetQuestion, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
-                            }
-                        }
-
-                        OutlinedTextField(
-                            value = resetAnswer,
-                            onValueChange = { resetAnswer = it },
-                            label = { Text("Security Answer") },
-                            leadingIcon = { Icon(Icons.Default.Help, contentDescription = "Answer", tint = GoldPremium) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = GoldPremium,
-                                unfocusedBorderColor = SurfaceGlassElevated,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedContainerColor = SurfaceGlass,
-                                unfocusedContainerColor = SurfaceGlass
-                            ),
-                            modifier = Modifier.fillMaxWidth().testTag("reset_answer"),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = resetNewPassword,
-                            onValueChange = { resetNewPassword = it },
-                            label = { Text("New Password") },
-                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "New Password", tint = GoldPremium) },
-                            visualTransformation = PasswordVisualTransformation(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = GoldPremium,
-                                unfocusedBorderColor = SurfaceGlassElevated,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedContainerColor = SurfaceGlass,
-                                unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("reset_new_password"),
-                        singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = resetConfirmPassword,
-                            onValueChange = { resetConfirmPassword = it },
-                            label = { Text("Confirm New Password") },
-                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Confirm", tint = GoldPremium) },
-                            visualTransformation = PasswordVisualTransformation(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = GoldPremium,
-                                unfocusedBorderColor = SurfaceGlassElevated,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary,
-                                focusedContainerColor = SurfaceGlass,
-                                unfocusedContainerColor = SurfaceGlass
-                            ),
-                            modifier = Modifier.fillMaxWidth().testTag("reset_confirm_password"),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        Button(
-                            onClick = {
-                                if (resetAnswer.isEmpty() || resetNewPassword.isEmpty()) {
-                                    resetError = "Please complete all password recovery fields."
-                                } else if (resetNewPassword != resetConfirmPassword) {
-                                    resetError = "Passwords do not match."
-                                } else if (resetNewPassword.length < 4) {
-                                    resetError = "Recovery password must be at least 4 characters."
-                                } else {
-                                    viewModel.resetSecurePassword(
-                                        email = resetEmail,
-                                        securityAnswer = resetAnswer,
-                                        newPasswordHash = resetNewPassword,
-                                        onSuccess = {
-                                            Toast.makeText(context, "Password updated successfully!", Toast.LENGTH_SHORT).show()
-                                            screenMode = "login"
-                                            email = resetEmail
-                                            password = ""
-                                        },
-                                        onFailure = { err ->
-                                            resetError = err
-                                        }
+                                    .padding(14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = securityQuestionsList[regQuestionIndex],
+                                        color = TextPrimary,
+                                        style = MaterialTheme.typography.bodyMedium
                                     )
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Select question", tint = GoldPremium)
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("UPDATE ACCESS PASSWORD", fontWeight = FontWeight.Bold)
-                        }
-                    }
+                            }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                    TextButton(
-                        onClick = { screenMode = "login" }
-                    ) {
-                        Text("← Return to Sign In", color = GoldPremium, fontWeight = FontWeight.Bold)
-                    }
-                }
+                            OutlinedTextField(
+                                value = regAnswer,
+                                onValueChange = { regAnswer = it },
+                                label = { Text("Recovery Answer") },
+                                leadingIcon = { Icon(Icons.Default.Help, contentDescription = "Answer", tint = GoldPremium) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldPremium,
+                                    unfocusedBorderColor = SurfaceGlassElevated,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedContainerColor = SurfaceGlass,
+                                    unfocusedContainerColor = SurfaceGlass
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("reg_answer"),
+                                singleLine = true
+                            )
 
-                "legacy" -> {
-                    Text(
-                        "LEGACY DOMAIN HARDWARE BYPASS",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(24.dp))
 
-                    OutlinedTextField(
-                        value = legacyCompanyCode,
-                        onValueChange = { legacyCompanyCode = it },
-                        label = { Text("Company Domain ID") },
-                        leadingIcon = { Icon(Icons.Default.Business, contentDescription = "Company", tint = GoldPremium) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPremium,
-                            unfocusedBorderColor = SurfaceGlassElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceGlass,
-                            unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text("SELECT PROFILE ROLE TO BYPASS:", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(SurfaceGlass)
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        val roles = listOf("Manager", "Captain", "Guide", "Driver")
-                        roles.forEach { role ->
-                            val isSelected = legacyRole == role
-                            Box(
+                            Button(
+                                onClick = {
+                                    val emailTrim = regEmail.trim()
+                                    if (regName.isEmpty() || emailTrim.isEmpty() || regPassword.isEmpty() || regAnswer.isEmpty()) {
+                                        regError = "Please fill in all mandatory enrollment fields."
+                                    } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(emailTrim).matches()) {
+                                        regError = "Please enter a valid company email address."
+                                    } else if (regPassword != regConfirmPassword) {
+                                        regError = "Passwords do not match."
+                                    } else if (passwordStrength < 0.6f) {
+                                        regError = "Password too weak. Please include letters and numbers."
+                                    } else {
+                                        viewModel.registerSecureUser(
+                                            name = regName,
+                                            email = emailTrim,
+                                            passwordHash = regPassword,
+                                            role = regRole,
+                                            phone = regPhone,
+                                            securityQuestion = securityQuestionsList[regQuestionIndex],
+                                            securityAnswer = regAnswer,
+                                            onSuccess = { msg ->
+                                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                                screenMode = "login"
+                                                email = emailTrim
+                                                password = ""
+                                            },
+                                            onFailure = { err ->
+                                                regError = err
+                                            }
+                                        )
+                                    }
+                                },
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) GoldPremium else Color.Transparent)
-                                    .clickable { legacyRole = role }
-                                    .padding(vertical = 10.dp),
-                                contentAlignment = Alignment.Center
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .testTag("submit_register_button"),
+                                colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
+                                Text("ENROLL OPERATOR", fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        "forgot" -> {
+                            Text(
+                                "SECURE PASSWORD RECOVERY",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted,
+                                modifier = Modifier.align(Alignment.Start)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            if (resetError.isNotEmpty()) {
                                 Text(
-                                    role,
+                                    text = resetError,
+                                    color = Color(0xFFE57373),
                                     style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) SlateDarkBg else TextSecondary
+                                    modifier = Modifier.padding(bottom = 8.dp)
                                 )
                             }
-                        }
-                    }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                            if (!hasVerifiedAnswer) {
+                                // Stage 1: Verify identity
+                                Text(
+                                    "Provide your registered operator email to verify credentials and unlock security question.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
 
-                    Button(
-                        onClick = {
-                            viewModel.performLogin(legacyCompanyCode, if (legacyRole == "Captain") "Boat Captain" else legacyRole)
-                            Toast.makeText(context, "Verified via bypass key.", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("LEGACY BYPASS ENTER", fontWeight = FontWeight.Bold)
-                    }
-                }
+                                OutlinedTextField(
+                                    value = resetEmail,
+                                    onValueChange = { resetEmail = it },
+                                    label = { Text("Operator Email Address") },
+                                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email", tint = GoldPremium) },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = GoldPremium,
+                                        unfocusedBorderColor = SurfaceGlassElevated,
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        focusedContainerColor = SurfaceGlass,
+                                        unfocusedContainerColor = SurfaceGlass
+                                    ),
+                                    modifier = Modifier.fillMaxWidth().testTag("reset_email"),
+                                    singleLine = true
+                                )
 
-                "mfa" -> {
-                    val user = pendingUser2Fa
-                    Text(
-                        "MULTI-FACTOR AUTHENTICATION",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = GoldPremium,
-                        letterSpacing = 2.sp,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
-                        "An encrypted dynamic token has been dispatched to ${user?.name ?: "your registered device"}.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Simulation token assist
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.2f))
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text("SIMULATED HARDWARE TOKEN", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("🔑 OTP code: 123456", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = GoldPremium, letterSpacing = 2.sp)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    if (mfaError.isNotEmpty()) {
-                        Text(
-                            text = mfaError,
-                            color = Color(0xFFE57373),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = mfaCode,
-                        onValueChange = { mfaCode = it },
-                        label = { Text("6-Digit MFA Verification Code") },
-                        leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = "OTP", tint = GoldPremium) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldPremium,
-                            unfocusedBorderColor = SurfaceGlassElevated,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceGlass,
-                            unfocusedContainerColor = SurfaceGlass
-                        ),
-                        modifier = Modifier.fillMaxWidth().testTag("mfa_code_input"),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Button(
-                        onClick = {
-                            if (mfaCode == "123456") {
-                                user?.let {
-                                    viewModel.completeLogin(it)
-                                    Toast.makeText(context, "Session Authenticated.", Toast.LENGTH_SHORT).show()
+                                Button(
+                                    onClick = {
+                                        val trimmedEmail = resetEmail.trim()
+                                        val match = viewModel.staff.value.firstOrNull { it.email.equals(trimmedEmail, ignoreCase = true) }
+                                        if (match != null) {
+                                            resetQuestion = match.securityQuestion
+                                            hasVerifiedAnswer = true
+                                            resetError = ""
+                                        } else {
+                                            resetError = "No operator account found with that email address."
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("LOAD RECOVERY PROTOCOL", fontWeight = FontWeight.Bold)
                                 }
                             } else {
-                                mfaError = "Invalid verification code. Please check simulation helper."
+                                // Stage 2: Recover
+                                Text(
+                                    "Recovery protocol loaded for $resetEmail.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF81C784),
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text("SECURITY QUESTION", style = MaterialTheme.typography.labelSmall, color = GoldPremium)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(resetQuestion, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                                    }
+                                }
+
+                                OutlinedTextField(
+                                    value = resetAnswer,
+                                    onValueChange = { resetAnswer = it },
+                                    label = { Text("Security Answer") },
+                                    leadingIcon = { Icon(Icons.Default.Help, contentDescription = "Answer", tint = GoldPremium) },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = GoldPremium,
+                                        unfocusedBorderColor = SurfaceGlassElevated,
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        focusedContainerColor = SurfaceGlass,
+                                        unfocusedContainerColor = SurfaceGlass
+                                    ),
+                                    modifier = Modifier.fillMaxWidth().testTag("reset_answer"),
+                                    singleLine = true
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = resetNewPassword,
+                                    onValueChange = { resetNewPassword = it },
+                                    label = { Text("New Password") },
+                                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "New Password", tint = GoldPremium) },
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = GoldPremium,
+                                        unfocusedBorderColor = SurfaceGlassElevated,
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        focusedContainerColor = SurfaceGlass,
+                                        unfocusedContainerColor = SurfaceGlass
+                                    ),
+                                    modifier = Modifier.fillMaxWidth().testTag("reset_new_password"),
+                                    singleLine = true
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                OutlinedTextField(
+                                    value = resetConfirmPassword,
+                                    onValueChange = { resetConfirmPassword = it },
+                                    label = { Text("Confirm New Password") },
+                                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Confirm", tint = GoldPremium) },
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = GoldPremium,
+                                        unfocusedBorderColor = SurfaceGlassElevated,
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        focusedContainerColor = SurfaceGlass,
+                                        unfocusedContainerColor = SurfaceGlass
+                                    ),
+                                    modifier = Modifier.fillMaxWidth().testTag("reset_confirm_password"),
+                                    singleLine = true
+                                )
+
+                                Spacer(modifier = Modifier.height(24.dp))
+
+                                Button(
+                                    onClick = {
+                                        if (resetAnswer.isEmpty() || resetNewPassword.isEmpty()) {
+                                            resetError = "Please complete all password recovery fields."
+                                        } else if (resetNewPassword != resetConfirmPassword) {
+                                            resetError = "Passwords do not match."
+                                        } else if (resetNewPassword.length < 4) {
+                                            resetError = "Recovery password must be at least 4 characters."
+                                        } else {
+                                            viewModel.resetSecurePassword(
+                                                email = resetEmail,
+                                                securityAnswer = resetAnswer,
+                                                newPasswordHash = resetNewPassword,
+                                                onSuccess = {
+                                                    Toast.makeText(context, "Password updated successfully!", Toast.LENGTH_SHORT).show()
+                                                    screenMode = "login"
+                                                    email = resetEmail
+                                                    password = ""
+                                                },
+                                                onFailure = { err ->
+                                                    resetError = err
+                                                }
+                                            )
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("UPDATE ACCESS PASSWORD", fontWeight = FontWeight.Bold)
+                                }
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth().height(52.dp).testTag("mfa_verify_button"),
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("CONFIRM SECURITY CODE", fontWeight = FontWeight.Bold)
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                    TextButton(
-                        onClick = { screenMode = "login" }
-                    ) {
-                        Text("Cancel & Return", color = GoldPremium)
+                            TextButton(
+                                onClick = { screenMode = "login" }
+                            ) {
+                                Text("← Return to Sign In", color = GoldPremium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        "mfa" -> {
+                            val user = pendingUser2Fa
+                            Text(
+                                "MULTI-FACTOR AUTHENTICATION",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = GoldPremium,
+                                letterSpacing = 2.sp,
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Text(
+                                "An encrypted dynamic token has been dispatched to ${user?.name ?: "your registered device"}.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Simulation token assist
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.2f))
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(14.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text("SIMULATED HARDWARE TOKEN", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("🔑 OTP code: 123456", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = GoldPremium, letterSpacing = 2.sp)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            if (mfaError.isNotEmpty()) {
+                                Text(
+                                    text = mfaError,
+                                    color = Color(0xFFE57373),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = mfaCode,
+                                onValueChange = { mfaCode = it },
+                                label = { Text("6-Digit MFA Verification Code") },
+                                leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = "OTP", tint = GoldPremium) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = GoldPremium,
+                                    unfocusedBorderColor = SurfaceGlassElevated,
+                                    focusedTextColor = TextPrimary,
+                                    unfocusedTextColor = TextPrimary,
+                                    focusedContainerColor = SurfaceGlass,
+                                    unfocusedContainerColor = SurfaceGlass
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("mfa_code_input"),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(24.dp))
+
+                            Button(
+                                onClick = {
+                                    if (mfaCode == "123456") {
+                                        user?.let {
+                                            viewModel.completeLogin(it)
+                                            Toast.makeText(context, "Session Authenticated.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } else {
+                                        mfaError = "Invalid verification code. Please check simulation helper."
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(52.dp).testTag("mfa_verify_button"),
+                                colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("CONFIRM SECURITY CODE", fontWeight = FontWeight.Bold)
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            TextButton(
+                                onClick = { screenMode = "login" }
+                            ) {
+                                Text("Cancel & Return", color = GoldPremium)
+                            }
+                        }
                     }
                 }
             }
@@ -1486,11 +1382,12 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
             scanningPhase = 2
             delay(1000)
             showBiometricDemo = false
-            val match = viewModel.staff.value.firstOrNull { it.role == "Boat Captain" }
+            val match = viewModel.staff.value.firstOrNull { it.role == "Boat Captain" } ?: viewModel.staff.value.firstOrNull()
             if (match != null) {
                 viewModel.completeLogin(match)
+                Toast.makeText(context, "Biometric matched: ${match.name}", Toast.LENGTH_SHORT).show()
             } else {
-                viewModel.performLogin("DIAMOND_EXCLUSIVE_YACHTS", "Manager")
+                Toast.makeText(context, "Biometric authentication failed. No enrolled operator found.", Toast.LENGTH_LONG).show()
             }
         }
 
@@ -2224,7 +2121,8 @@ fun BulletinShimmer(brush: Brush) {
 fun SwipeableBookingItem(
     booking: Booking,
     viewModel: DiamondsViewModel,
-    context: android.content.Context
+    context: android.content.Context,
+    onItemClick: () -> Unit
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { dismissValue ->
@@ -2237,11 +2135,9 @@ fun SwipeableBookingItem(
                     false
                 }
                 SwipeToDismissBoxValue.EndToStart -> {
-                    if (booking.status != "Cancelled") {
-                        viewModel.updateBookingStatus(booking.id, "Cancelled")
-                        Toast.makeText(context, "Cancelled booking for ${booking.customerName}", Toast.LENGTH_SHORT).show()
-                    }
-                    false
+                    viewModel.deleteBooking(booking)
+                    Toast.makeText(context, "Deleted/Archived booking for ${booking.customerName}", Toast.LENGTH_SHORT).show()
+                    true
                 }
                 else -> false
             }
@@ -2266,7 +2162,7 @@ fun SwipeableBookingItem(
             }
             val icon = when (dismissState.dismissDirection) {
                 SwipeToDismissBoxValue.StartToEnd -> Icons.Default.CheckCircle
-                SwipeToDismissBoxValue.EndToStart -> Icons.Default.Cancel
+                SwipeToDismissBoxValue.EndToStart -> Icons.Default.Delete
                 else -> Icons.Default.CheckCircle
             }
             val iconColor = when (dismissState.dismissDirection) {
@@ -2276,7 +2172,7 @@ fun SwipeableBookingItem(
             }
             val label = when (dismissState.dismissDirection) {
                 SwipeToDismissBoxValue.StartToEnd -> "Confirm"
-                SwipeToDismissBoxValue.EndToStart -> "Cancel"
+                SwipeToDismissBoxValue.EndToStart -> "Delete / Archive"
                 else -> ""
             }
             Box(
@@ -2309,7 +2205,9 @@ fun SwipeableBookingItem(
                 colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
                 shape = RoundedCornerShape(16.dp),
                 border = BorderStroke(1.dp, SurfaceGlassElevated),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onItemClick() }
             ) {
                 Row(
                     modifier = Modifier
@@ -2404,6 +2302,8 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
     // Search and Category states
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
+    var recentExcursionsSearchQuery by remember { mutableStateOf("") }
+    var selectedBookingForDetails by remember { mutableStateOf<Booking?>(null) }
 
     // Quick Booking states
     var showQuickBookingDialog by remember { mutableStateOf(false) }
@@ -2676,6 +2576,10 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
             Spacer(modifier = Modifier.height(16.dp))
         }
 
+        item {
+            WeeklyRevenueChartCard(bookings = bookings)
+        }
+
         // Analytics / KPI Stats Grid
         item {
             Text(
@@ -2762,12 +2666,65 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                         letterSpacing = 1.5.sp
                     )
                     if (!isLoading) {
-                        TextButton(onClick = { /* Clear All */ }) {
+                        TextButton(onClick = { viewModel.clearAllNotifications() }) {
                             Text("Clear", color = GoldPremium, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.3f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                tint = GoldPremium,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "REAL-TIME PUSH TELEMETRY",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = GoldPremium,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.2.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Background alerts are active. You can force an incoming simulated booking or status change to verify the push notification channel.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                viewModel.triggerSimulatedPushNotification()
+                                Toast.makeText(context, "Triggering simulated push alert...", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("TRIGGER SIMULATED PUSH ALERT", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
 
             if (isLoading) {
@@ -2795,16 +2752,46 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                 letterSpacing = 1.5.sp
             )
             Text(
-                "Swipe right to Confirm • Swipe left to Cancel",
+                "Swipe right to Confirm • Swipe left to Delete",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = recentExcursionsSearchQuery,
+                onValueChange = { recentExcursionsSearchQuery = it },
+                placeholder = { Text("Search by guest or tour name...", color = TextSecondary.copy(alpha = 0.6f)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search Recent", tint = GoldPremium) },
+                trailingIcon = {
+                    if (recentExcursionsSearchQuery.isNotEmpty()) {
+                        IconButton(onClick = { recentExcursionsSearchQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextSecondary)
+                        }
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = GoldPremium,
+                    unfocusedBorderColor = SurfaceGlassElevated,
+                    focusedContainerColor = SurfaceGlass,
+                    unfocusedContainerColor = SurfaceGlass,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true
+            )
         }
 
-        // Filter bookings by selectedDashboardDate (if not null)
+        // Filter bookings by selectedDashboardDate (if not null) and recentExcursionsSearchQuery
         val filteredDashboardBookings = bookings.filter { booking ->
-            selectedDashboardDate == null || booking.date == selectedDashboardDate
+            (selectedDashboardDate == null || booking.date == selectedDashboardDate) &&
+            (recentExcursionsSearchQuery.isEmpty() || 
+             booking.customerName.contains(recentExcursionsSearchQuery, ignoreCase = true) ||
+             booking.experienceTitle.contains(recentExcursionsSearchQuery, ignoreCase = true))
         }
 
         if (isLoading) {
@@ -2822,7 +2809,7 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (selectedDashboardDate != null) "No excursions scheduled for $selectedDashboardDate" else "No excursions recorded.",
+                        text = if (recentExcursionsSearchQuery.isNotEmpty()) "No matching excursions found." else if (selectedDashboardDate != null) "No excursions scheduled for $selectedDashboardDate" else "No excursions recorded.",
                         color = TextSecondary,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -2833,7 +2820,8 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                 SwipeableBookingItem(
                     booking = booking,
                     viewModel = viewModel,
-                    context = context
+                    context = context,
+                    onItemClick = { selectedBookingForDetails = booking }
                 )
             }
         }
@@ -3559,6 +3547,15 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                 }
             }
         }
+    }
+
+    selectedBookingForDetails?.let { booking ->
+        val customer = customers.firstOrNull { it.id == booking.customerId }
+        BookingDetailModal(
+            booking = booking,
+            customer = customer,
+            onDismiss = { selectedBookingForDetails = null }
+        )
     }
 }
 
@@ -9402,6 +9399,398 @@ fun DiamondsFloatingAdminMenu(
                     tint = Color.White,
                     modifier = Modifier.size(32.dp)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun BookingDetailModal(
+    booking: Booking,
+    customer: Customer?,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SlateDarkBg,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.ConfirmationNumber, contentDescription = null, tint = GoldPremium)
+                Text(
+                    text = "BOOKING SPECIFICATIONS",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = GoldPremium,
+                    letterSpacing = 1.5.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // EXCURSION SECTION
+                Column {
+                    Text(
+                        text = "EXCURSION & SCHEDULE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                        border = BorderStroke(1.dp, SurfaceGlassElevated)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+                            Text(
+                                text = booking.experienceTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.DateRange, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(booking.date, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Schedule, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(booking.timeSlot, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // GUEST CONTACT SECTION
+                Column {
+                    Text(
+                        text = "GUEST CONTACT & INFO",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                        border = BorderStroke(1.dp, SurfaceGlassElevated)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = booking.customerName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                if (customer?.vipStatus == true) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(GoldPremium.copy(alpha = 0.2f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("VIP GUEST", color = GoldPremium, fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                    }
+                                }
+                            }
+                            HorizontalDivider(color = SurfaceGlassElevated, thickness = 1.dp)
+                            
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Phone, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Phone: ${customer?.phoneNumber ?: "N/A"}", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                            }
+                            
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Emergency, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Emergency: ${customer?.emergencyContact ?: "N/A"}", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                            }
+
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.LocationOn, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Pickup: ${customer?.pickupHotel ?: "N/A"} (Room: ${customer?.roomNumber ?: "N/A"})", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                            }
+
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Translate, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Language: ${customer?.language ?: "English"}", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                            }
+
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Icon(Icons.Default.Badge, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Passport: ${customer?.passportNumber ?: "N/A"} (${customer?.nationality ?: "N/A"})", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                            }
+                        }
+                    }
+                }
+
+                // TRANSACTION & NOTES
+                Column {
+                    Text(
+                        text = "FINANCIALS & TRANSACTION",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                        border = BorderStroke(1.dp, SurfaceGlassElevated)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Total Revenue:", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                                Text("€${String.format("%,.2f", booking.revenue)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = GoldPremium)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Status:", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                                Text(booking.status, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = when(booking.status) {
+                                    "Confirmed", "Paid" -> StatusLiveGreen
+                                    "Pending" -> StatusAlertAmber
+                                    else -> StatusErrorRed
+                                })
+                            }
+                            if (booking.notes.isNotEmpty()) {
+                                HorizontalDivider(color = SurfaceGlassElevated, thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
+                                Text("Operator Notes:", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                Text(booking.notes, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("CLOSE", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
+
+@Composable
+fun WeeklyRevenueChartCard(bookings: List<Booking>) {
+    val last7Days = listOf(
+        "2026-07-08" to "Wed",
+        "2026-07-09" to "Thu",
+        "2026-07-10" to "Fri",
+        "2026-07-11" to "Sat",
+        "2026-07-12" to "Sun",
+        "2026-07-13" to "Mon",
+        "2026-07-14" to "Tue"
+    )
+
+    // Compute revenue for each of the 7 days
+    val revenues = last7Days.map { (dateStr, _) ->
+        bookings.filter { it.date == dateStr && it.status != "Cancelled" }.sumOf { it.revenue }.toFloat()
+    }
+
+    val totalWeekRevenue = revenues.sum()
+    val maxRevenue = (revenues.maxOrNull() ?: 100f).coerceAtLeast(100f)
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, SurfaceGlassElevated),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header Info
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "WEEKLY REVENUE TREND",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        letterSpacing = 1.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "€${String.format("%,.0f", totalWeekRevenue)}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldPremium
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(StatusLiveGreen.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "+12.4% vs last week",
+                        color = StatusLiveGreen,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Line Chart Canvas
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 24.dp, start = 8.dp, end = 8.dp)
+                ) {
+                    val width = size.width
+                    val height = size.height
+                    val spacing = width / (revenues.size - 1)
+
+                    // Draw helper horizontal grid lines (3 lines)
+                    val gridLines = 3
+                    for (i in 0..gridLines) {
+                        val y = height * i / gridLines
+                        drawLine(
+                            color = SurfaceGlassElevated.copy(alpha = 0.4f),
+                            start = Offset(0f, y),
+                            end = Offset(width, y),
+                            strokeWidth = 1f
+                        )
+                    }
+
+                    // Create connection points for the path
+                    val points = revenues.mapIndexed { index, revenue ->
+                        val x = index * spacing
+                        // Invert y because (0,0) is top-left
+                        val normalizedY = if (maxRevenue > 0) revenue / maxRevenue else 0f
+                        val y = height - (normalizedY * height * 0.85f) // offset slightly from top
+                        Offset(x, y)
+                    }
+
+                    // Draw background gradient under the curve
+                    if (points.isNotEmpty()) {
+                        val fillPath = Path().apply {
+                            moveTo(points.first().x, height)
+                            points.forEach { point ->
+                                lineTo(point.x, point.y)
+                            }
+                            lineTo(points.last().x, height)
+                            close()
+                        }
+                        drawPath(
+                            path = fillPath,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    GoldPremium.copy(alpha = 0.35f),
+                                    Color.Transparent
+                                ),
+                                startY = 0f,
+                                endY = height
+                            )
+                        )
+                    }
+
+                    // Draw the primary trend line (smoothed line)
+                    if (points.isNotEmpty()) {
+                        val strokePath = Path().apply {
+                            moveTo(points.first().x, points.first().y)
+                            for (i in 1 until points.size) {
+                                // Simple bezier connection for smooth rendering
+                                val p0 = points[i - 1]
+                                val p1 = points[i]
+                                val controlPoint1 = Offset(p0.x + spacing / 2, p0.y)
+                                val controlPoint2 = Offset(p1.x - spacing / 2, p1.y)
+                                cubicTo(
+                                    controlPoint1.x, controlPoint1.y,
+                                    controlPoint2.x, controlPoint2.y,
+                                    p1.x, p1.y
+                                )
+                            }
+                        }
+                        drawPath(
+                            path = strokePath,
+                            color = GoldPremium,
+                            style = Stroke(
+                                width = 3.dp.toPx(),
+                                miter = Stroke.DefaultMiter
+                            )
+                        )
+
+                        // Draw golden dots and outer halo on each peak
+                        points.forEachIndexed { index, point ->
+                            drawCircle(
+                                color = SlateDarkBg,
+                                radius = 5.dp.toPx(),
+                                center = point
+                            )
+                            drawCircle(
+                                color = GoldPremium,
+                                radius = 3.dp.toPx(),
+                                center = point
+                            )
+                        }
+                    }
+                }
+
+                // X Axis Day labels at bottom
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    last7Days.forEach { (_, dayName) ->
+                        Text(
+                            text = dayName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
         }
     }
