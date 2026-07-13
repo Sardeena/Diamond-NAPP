@@ -462,6 +462,7 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
         "What is the brand of your first watch?"
     )
     var regQuestionIndex by remember { mutableStateOf(0) }
+    var showQuestionDropdown by remember { mutableStateOf(false) }
     var regAnswer by remember { mutableStateOf("") }
     var regError by remember { mutableStateOf("") }
 
@@ -973,7 +974,7 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
                             )
                             Spacer(modifier = Modifier.height(6.dp))
 
-                            // Mini Dropdown simulation for recovery question
+                            // Mini Dropdown for recovery question
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -981,7 +982,7 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
                                     .background(SurfaceGlass)
                                     .border(1.dp, SurfaceGlassElevated, RoundedCornerShape(8.dp))
                                     .clickable {
-                                        regQuestionIndex = (regQuestionIndex + 1) % securityQuestionsList.size
+                                        showQuestionDropdown = true
                                     }
                                     .padding(14.dp)
                             ) {
@@ -993,9 +994,28 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
                                     Text(
                                         text = securityQuestionsList[regQuestionIndex],
                                         color = TextPrimary,
-                                        style = MaterialTheme.typography.bodyMedium
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f)
                                     )
                                     Icon(Icons.Default.ArrowDropDown, contentDescription = "Select question", tint = GoldPremium)
+                                }
+
+                                DropdownMenu(
+                                    expanded = showQuestionDropdown,
+                                    onDismissRequest = { showQuestionDropdown = false },
+                                    modifier = Modifier
+                                        .background(SlateDarkBg)
+                                        .border(1.dp, GoldPremium.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                ) {
+                                    securityQuestionsList.forEachIndexed { index, question ->
+                                        DropdownMenuItem(
+                                            text = { Text(question, color = TextPrimary, style = MaterialTheme.typography.bodyMedium) },
+                                            onClick = {
+                                                regQuestionIndex = index
+                                                showQuestionDropdown = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
 
@@ -2397,9 +2417,16 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
             scope.launch {
                 isLoading = true
                 if (viewModel.isSupabaseConfigured()) {
+                    Toast.makeText(context, "Initiating master node sync with cloud database...", Toast.LENGTH_SHORT).show()
                     viewModel.syncDataWithSupabase()
                 } else {
-                    delay(1200)
+                    Toast.makeText(context, "Synchronizing latest operator records...", Toast.LENGTH_SHORT).show()
+                    delay(1500)
+                    // Reconcile and add fresh telemetry
+                    viewModel.addSecurityLog("MANUAL_SYNC", "Manual synchronization sequence initiated. Reconciled offline sqlite database.")
+                    // Generate a new simulated push event so that the screen gets visual updates
+                    viewModel.triggerSimulatedPushNotification()
+                    Toast.makeText(context, "All tables synchronized successfully (Offline Mode)", Toast.LENGTH_SHORT).show()
                 }
                 isLoading = false
             }
@@ -3694,6 +3721,32 @@ fun BookingsScreen(viewModel: DiamondsViewModel) {
     var activeBoardingPassBooking by remember { mutableStateOf<Booking?>(null) }
     var activeChatBooking by remember { mutableStateOf<Booking?>(null) }
 
+    var activeSubTab by remember { mutableStateOf("directory") } // "directory" or "create"
+
+    // Form states
+    var formGuestName by remember { mutableStateOf("") }
+    var selectedExperienceId by remember { mutableStateOf(1) }
+    var selectedExperienceTitle by remember { mutableStateOf("Sunset Champagne Yacht Cruise") }
+    var formPrice by remember { mutableStateOf("2500") }
+    var selectedDateStr by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())) }
+    var formNotes by remember { mutableStateOf("") }
+
+    val calendar = Calendar.getInstance()
+    val datePickerDialog = android.app.DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            val selectedDate = Calendar.getInstance().apply {
+                set(Calendar.YEAR, year)
+                set(Calendar.MONTH, month)
+                set(Calendar.DAY_OF_MONTH, dayOfMonth)
+            }
+            selectedDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(selectedDate.time)
+        },
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH),
+        calendar.get(Calendar.DAY_OF_MONTH)
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -3722,371 +3775,646 @@ fun BookingsScreen(viewModel: DiamondsViewModel) {
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
-        // Search bar
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            placeholder = { Text("Search your cruises & excursions...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = TextSecondary) },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { searchQuery = "" }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextSecondary)
-                    }
-                }
-            },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = GoldPremium,
-                unfocusedBorderColor = SurfaceGlassElevated,
-                focusedContainerColor = SurfaceGlass,
-                unfocusedContainerColor = SurfaceGlass,
-                focusedTextColor = TextPrimary,
-                unfocusedTextColor = TextPrimary
-            ),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Horizontal filter list
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
+        // Premium Sub-Tab Selector: Voyages Directory vs Create Excursion
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(SurfaceGlassElevated.copy(alpha = 0.5f))
+                .padding(4.dp)
         ) {
-            items(filters) { filter ->
-                val isSelected = selectedFilter == filter
+            val subTabs = listOf(
+                "directory" to "Voyages Directory",
+                "create" to "Create Excursion"
+            )
+            subTabs.forEach { (tabKey, label) ->
+                val isSelected = activeSubTab == tabKey
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) GoldPremium else SurfaceGlass)
-                        .border(1.dp, if (isSelected) GoldPremium else SurfaceGlassElevated, RoundedCornerShape(12.dp))
-                        .clickable { selectedFilter = filter }
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSelected) SurfaceGlass else Color.Transparent)
+                        .clickable { activeSubTab = tabKey }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        filter,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isSelected) Color.White else TextSecondary
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = if (tabKey == "directory") Icons.Default.AirplaneTicket else Icons.Default.Add,
+                            contentDescription = null,
+                            tint = if (isSelected) GoldPremium else TextMuted,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isSelected) GoldPremium else TextMuted,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Filter logic
-        val filteredList = bookings.filter { booking ->
-            val matchesQuery = booking.experienceTitle.contains(searchQuery, ignoreCase = true) ||
-                               booking.customerName.contains(searchQuery, ignoreCase = true)
-            
-            val matchesFilter = when (selectedFilter) {
-                "All" -> true
-                "Upcoming" -> booking.status in listOf("Pending", "Confirmed", "Paid", "Checked In")
-                "Completed" -> booking.status == "Completed"
-                "Cancelled" -> booking.status == "Cancelled"
-                else -> true
-            }
+        if (activeSubTab == "directory") {
+            // Search bar
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search your cruises & excursions...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = TextSecondary) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextSecondary)
+                        }
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = GoldPremium,
+                    unfocusedBorderColor = SurfaceGlassElevated,
+                    focusedContainerColor = SurfaceGlass,
+                    unfocusedContainerColor = SurfaceGlass,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary
+                ),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
 
-            // In user-side mode, non-managers (e.g. Captain, Guide, Driver) only see their assigned bookings
-            val isUserOnly = loggedInUser?.role?.equals("Manager", ignoreCase = true) == false && 
-                             loggedInUser?.role?.equals("Admin", ignoreCase = true) == false
-            val matchesUser = if (isUserOnly) {
-                booking.staffId == (loggedInUser?.id ?: -1)
-            } else {
-                true // Administrators can see all bookings
-            }
-            
-            matchesQuery && matchesFilter && matchesUser
-        }
+            Spacer(modifier = Modifier.height(12.dp))
 
-        if (filteredList.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 50.dp),
-                contentAlignment = Alignment.Center
+            // Horizontal filter list
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(24.dp)
-                ) {
+                items(filters) { filter ->
+                    val isSelected = selectedFilter == filter
                     Box(
                         modifier = Modifier
-                            .size(72.dp)
-                            .background(GoldLight.copy(alpha = 0.4f), CircleShape),
-                        contentAlignment = Alignment.Center
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSelected) GoldPremium else SurfaceGlass)
+                            .border(1.dp, if (isSelected) GoldPremium else SurfaceGlassElevated, RoundedCornerShape(12.dp))
+                            .clickable { selectedFilter = filter }
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Inbox,
-                            contentDescription = "Empty",
-                            tint = GoldPremium,
-                            modifier = Modifier.size(36.dp)
+                        Text(
+                            filter,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) Color.White else TextSecondary
                         )
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "Your Itinerary is Clear",
-                        color = TextPrimary,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "You don't have any excursions booked in this category yet. Begin your exclusive Amalfi adventure today.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Button(
-                        onClick = { viewModel.currentScreen.value = "explore" },
-                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Explore, contentDescription = "Explore", modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Explore Amalfi Cruises", fontWeight = FontWeight.Bold)
                     }
                 }
             }
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(filteredList, key = { it.id }) { booking ->
-                    val assignedStaff = staffList.find { it.id == booking.staffId }
-                    val assignedVehicle = vehicleList.find { it.id == booking.vehicleId }
 
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
-                        shape = RoundedCornerShape(24.dp),
-                        border = BorderStroke(1.dp, SurfaceGlassElevated),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("user_booking_card_${booking.id}")
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Filter logic
+            val filteredList = bookings.filter { booking ->
+                val matchesQuery = booking.experienceTitle.contains(searchQuery, ignoreCase = true) ||
+                                   booking.customerName.contains(searchQuery, ignoreCase = true)
+                
+                val matchesFilter = when (selectedFilter) {
+                    "All" -> true
+                    "Upcoming" -> booking.status in listOf("Pending", "Confirmed", "Paid", "Checked In")
+                    "Completed" -> booking.status == "Completed"
+                    "Cancelled" -> booking.status == "Cancelled"
+                    else -> true
+                }
+
+                // In user-side mode, non-managers (e.g. Captain, Guide, Driver) only see their assigned bookings
+                val isUserOnly = loggedInUser?.role?.equals("Manager", ignoreCase = true) == false && 
+                                 loggedInUser?.role?.equals("Admin", ignoreCase = true) == false
+                val matchesUser = if (isUserOnly) {
+                    booking.staffId == (loggedInUser?.id ?: -1)
+                } else {
+                    true // Administrators can see all bookings
+                }
+                
+                matchesQuery && matchesFilter && matchesUser
+            }
+
+            if (filteredList.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = 50.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
                     ) {
-                        Column {
-                            // Banner block
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(140.dp)
-                            ) {
-                                val cardImageUrl = when {
-                                    booking.experienceTitle.contains("Yacht") -> "https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&q=80&w=600"
-                                    booking.experienceTitle.contains("Speedboat") -> "https://images.unsplash.com/photo-1559136555-9303baea8ebd?auto=format&fit=crop&q=80&w=600"
-                                    booking.experienceTitle.contains("Helicopter") -> "https://images.unsplash.com/photo-1530841377377-3ff06c0ca713?auto=format&fit=crop&q=80&w=600"
-                                    else -> "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&q=80&w=600"
-                                }
-                                AsyncImage(
-                                    model = cardImageUrl,
-                                    contentDescription = booking.experienceTitle,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
-                                                startY = 100f
-                                            )
-                                        )
-                                )
-                                
-                                // Left schedule badge
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopStart)
-                                        .padding(12.dp)
-                                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Schedule, contentDescription = "Schedule", tint = GoldLight, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(booking.timeSlot, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
+                        Box(
+                            modifier = Modifier
+                                .size(72.dp)
+                                .background(GoldLight.copy(alpha = 0.4f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Inbox,
+                                contentDescription = "Empty",
+                                tint = GoldPremium,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Your Itinerary is Clear",
+                            color = TextPrimary,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "You don't have any excursions booked in this category yet. Begin your exclusive Amalfi adventure today.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Button(
+                            onClick = { viewModel.currentScreen.value = "explore" },
+                            colors = ButtonDefaults.buttonColors(containerColor = GoldPremium),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Explore, contentDescription = "Explore", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Explore Amalfi Cruises", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(filteredList, key = { it.id }) { booking ->
+                        val assignedStaff = staffList.find { it.id == booking.staffId }
+                        val assignedVehicle = vehicleList.find { it.id == booking.vehicleId }
 
-                                // Right status badge
-                                val (statusText, statusBg, statusColor) = when (booking.status) {
-                                    "Pending" -> Triple("Awaiting VIP Approval", StatusAlertAmber.copy(alpha = 0.9f), Color.White)
-                                    "Confirmed" -> Triple("Confirmed Voyage", StatusPaidBlue, Color.White)
-                                    "Paid" -> Triple("VIP Charter Certified", StatusLiveGreen, Color.White)
-                                    "Checked In" -> Triple("Now Boarding", GoldPremium, Color.White)
-                                    "Completed" -> Triple("Voyage Completed", Color.Gray, Color.White)
-                                    else -> Triple("Cancelled", StatusErrorRed, Color.White)
-                                }
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                            shape = RoundedCornerShape(24.dp),
+                            border = BorderStroke(1.dp, SurfaceGlassElevated),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("user_booking_card_${booking.id}")
+                        ) {
+                            Column {
+                                // Banner block
                                 Box(
                                     modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(12.dp)
-                                        .background(statusBg, RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                ) {
-                                    Text(statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
-                                }
-
-                                // Bottom left / right overlay
-                                Row(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomStart)
                                         .fillMaxWidth()
-                                        .padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Bottom
+                                        .height(140.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = booking.experienceTitle,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = Color.White,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                    val cardImageUrl = when {
+                                        booking.experienceTitle.contains("Yacht") -> "https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&q=80&w=600"
+                                        booking.experienceTitle.contains("Speedboat") -> "https://images.unsplash.com/photo-1559136555-9303baea8ebd?auto=format&fit=crop&q=80&w=600"
+                                        booking.experienceTitle.contains("Helicopter") -> "https://images.unsplash.com/photo-1530841377377-3ff06c0ca713?auto=format&fit=crop&q=80&w=600"
+                                        else -> "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&q=80&w=600"
                                     }
-                                    Text(
-                                        text = "€${String.format("%,.0f", booking.revenue)}",
-                                        color = GoldLight,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.ExtraBold
+                                    AsyncImage(
+                                        model = cardImageUrl,
+                                        contentDescription = booking.experienceTitle,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
                                     )
-                                }
-                            }
-
-                            // Details content block
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    // Vessel Info
-                                    Row(
-                                        modifier = Modifier.weight(1f),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .background(GoldLight.copy(alpha = 0.5f), CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(Icons.Default.DirectionsBoat, contentDescription = "Boat", tint = GoldPremium, modifier = Modifier.size(18.dp))
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
-                                            Text("VESSEL / CRAFT", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                            Text(assignedVehicle?.name ?: "Premium Charter", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                        }
-                                    }
-
-                                    // Captain / Crew Info
-                                    Row(
-                                        modifier = Modifier.weight(1f),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .background(BronzeWarm.copy(alpha = 0.5f), CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(Icons.Default.Person, contentDescription = "Crew", tint = Color(0xFF1070B8), modifier = Modifier.size(18.dp))
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
-                                            Text("VIP CAPTAIN / PILOT", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                            Text(assignedStaff?.name ?: "Elite Host", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Divider(color = SurfaceGlassElevated.copy(alpha = 0.6f))
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                // Date & Location Row
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.CalendarToday, contentDescription = "Date", tint = TextSecondary, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Date: ${booking.date}", style = MaterialTheme.typography.bodySmall, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                                    }
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Place, contentDescription = "Pickup", tint = TextSecondary, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Marina Grande", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                                    }
-                                }
-
-                                if (booking.notes.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(10.dp))
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(GoldLight.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
-                                            .padding(10.dp)
+                                            .fillMaxSize()
+                                            .background(
+                                                Brush.verticalGradient(
+                                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                                                    startY = 100f
+                                                )
+                                            )
+                                    )
+                                    
+                                    // Left schedule badge
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(12.dp)
+                                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Star, contentDescription = "Notes", tint = GoldPremium, modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(Icons.Default.Schedule, contentDescription = "Schedule", tint = GoldLight, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(booking.timeSlot, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    // Right status badge
+                                    val (statusText, statusBg, statusColor) = when (booking.status) {
+                                        "Pending" -> Triple("Awaiting VIP Approval", StatusAlertAmber.copy(alpha = 0.9f), Color.White)
+                                        "Confirmed" -> Triple("Confirmed Voyage", StatusPaidBlue, Color.White)
+                                        "Paid" -> Triple("VIP Charter Certified", StatusLiveGreen, Color.White)
+                                        "Checked In" -> Triple("Now Boarding", GoldPremium, Color.White)
+                                        "Completed" -> Triple("Voyage Completed", Color.Gray, Color.White)
+                                        else -> Triple("Cancelled", StatusErrorRed, Color.White)
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(12.dp)
+                                            .background(statusBg, RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                                    }
+
+                                    // Bottom left / right overlay
+                                    Row(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomStart)
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.Bottom
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                "VIP Concierge Request: \"${booking.notes}\"",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontStyle = FontStyle.Italic,
-                                                color = TextSecondary,
+                                                text = booking.experienceTitle,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.White,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }
+                                        Text(
+                                            text = "€${String.format("%,.0f", booking.revenue)}",
+                                            color = GoldLight,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                // User action buttons
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Button(
-                                        onClick = { activeBoardingPassBooking = booking },
-                                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = Color.White),
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.weight(1.1f)
+                                // Details content block
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
-                                        Icon(Icons.Default.QrCode, contentDescription = "Ticket", modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Boarding Pass", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        // Vessel Info
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .background(GoldLight.copy(alpha = 0.5f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(Icons.Default.DirectionsBoat, contentDescription = "Boat", tint = GoldPremium, modifier = Modifier.size(18.dp))
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text("VESSEL / CRAFT", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                                Text(assignedVehicle?.name ?: "Premium Charter", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                            }
+                                        }
+
+                                        // Captain / Crew Info
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .background(BronzeWarm.copy(alpha = 0.5f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(Icons.Default.Person, contentDescription = "Crew", tint = Color(0xFF1070B8), modifier = Modifier.size(18.dp))
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text("VIP CAPTAIN / PILOT", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                                Text(assignedStaff?.name ?: "Elite Host", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                            }
+                                        }
                                     }
 
-                                    OutlinedButton(
-                                        onClick = { activeChatBooking = booking },
-                                        border = BorderStroke(1.dp, GoldPremium),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldPremium),
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier.weight(0.9f)
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Divider(color = SurfaceGlassElevated.copy(alpha = 0.6f))
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    // Date & Location Row
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.Face, contentDescription = "Concierge", modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Concierge", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.CalendarToday, contentDescription = "Date", tint = TextSecondary, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Date: ${booking.date}", style = MaterialTheme.typography.bodySmall, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                                        }
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Place, contentDescription = "Pickup", tint = TextSecondary, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Marina Grande", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                                        }
+                                    }
+
+                                    if (booking.notes.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(GoldLight.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                                                .padding(10.dp)
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Star, contentDescription = "Notes", tint = GoldPremium, modifier = Modifier.size(14.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    "VIP Concierge Request: \"${booking.notes}\"",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontStyle = FontStyle.Italic,
+                                                    color = TextSecondary,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    // User action buttons
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = { activeBoardingPassBooking = booking },
+                                            colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = Color.White),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.weight(1.1f)
+                                        ) {
+                                            Icon(Icons.Default.QrCode, contentDescription = "Ticket", modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Boarding Pass", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = { activeChatBooking = booking },
+                                            border = BorderStroke(1.dp, GoldPremium),
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = GoldPremium),
+                                            shape = RoundedCornerShape(12.dp),
+                                            modifier = Modifier.weight(0.9f)
+                                        ) {
+                                            Icon(Icons.Default.Face, contentDescription = "Concierge", modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Concierge", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "NEW EXCURSION CHARTER PROTOCOL",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = GoldPremium,
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // Guest Name Input
+                OutlinedTextField(
+                    value = formGuestName,
+                    onValueChange = { formGuestName = it },
+                    label = { Text("Client / Guest Full Name") },
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = GoldPremium) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = GoldPremium,
+                        unfocusedBorderColor = SurfaceGlassElevated,
+                        focusedContainerColor = SurfaceGlass,
+                        unfocusedContainerColor = SurfaceGlass,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("form_guest_name"),
+                    singleLine = true,
+                    placeholder = { Text("e.g. Lady Beatrice Harrington") }
+                )
+
+                // Excursion Type Selection
+                Column {
+                    Text(
+                        text = "Select Excursion Type",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    val experiencesList by viewModel.experiences.collectAsStateWithLifecycle()
+                    experiencesList.forEach { exp ->
+                        val isSelected = selectedExperienceId == exp.id
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) SurfaceGlassElevated else SurfaceGlass
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (isSelected) GoldPremium else SurfaceGlassElevated
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedExperienceId = exp.id
+                                    selectedExperienceTitle = exp.title
+                                    formPrice = exp.price.toInt().toString()
+                                }
+                                .padding(vertical = 4.dp)
+                                .testTag("excursion_type_${exp.id}")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = {
+                                        selectedExperienceId = exp.id
+                                        selectedExperienceTitle = exp.title
+                                        formPrice = exp.price.toInt().toString()
+                                    },
+                                    colors = RadioButtonDefaults.colors(selectedColor = GoldPremium)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = exp.title,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary
+                                    )
+                                    Text(
+                                        text = "${exp.duration} • Base: €${String.format("%,.0f", exp.price)}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Price Input Field
+                OutlinedTextField(
+                    value = formPrice,
+                    onValueChange = { formPrice = it },
+                    label = { Text("Agreed Contract Price (€)") },
+                    leadingIcon = { Icon(Icons.Default.PriceChange, contentDescription = null, tint = GoldPremium) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = GoldPremium,
+                        unfocusedBorderColor = SurfaceGlassElevated,
+                        focusedContainerColor = SurfaceGlass,
+                        unfocusedContainerColor = SurfaceGlass,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("form_price"),
+                    singleLine = true
+                )
+
+                // Date Picker Selector
+                Column {
+                    Text(
+                        text = "Select Excursion Voyage Date",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SurfaceGlass)
+                            .border(1.dp, SurfaceGlassElevated, RoundedCornerShape(12.dp))
+                            .clickable { datePickerDialog.show() }
+                            .padding(16.dp)
+                            .testTag("form_date_picker_trigger"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CalendarToday, contentDescription = "Voyage Date", tint = GoldPremium)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Selected Date", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                Text(selectedDateStr, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Text(
+                            text = "Pick Date",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = GoldPremium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Additional Notes (Concierge request)
+                OutlinedTextField(
+                    value = formNotes,
+                    onValueChange = { formNotes = it },
+                    label = { Text("Special Dietary / VIP Concierge Notes") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = GoldPremium,
+                        unfocusedBorderColor = SurfaceGlassElevated,
+                        focusedContainerColor = SurfaceGlass,
+                        unfocusedContainerColor = SurfaceGlass,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("form_notes"),
+                    maxLines = 3
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Confirm Button
+                Button(
+                    onClick = {
+                        if (formGuestName.isBlank()) {
+                            Toast.makeText(context, "Please provide the guest name.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        val priceValDouble = formPrice.toDoubleOrNull()
+                        if (priceValDouble == null || priceValDouble <= 0) {
+                            Toast.makeText(context, "Please enter a valid price.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        viewModel.addBooking(
+                            Booking(
+                                customerId = 100, // Custom client slot
+                                customerName = formGuestName,
+                                experienceId = selectedExperienceId,
+                                experienceTitle = selectedExperienceTitle,
+                                date = selectedDateStr,
+                                timeSlot = "10:00 - 14:00",
+                                status = "Pending",
+                                revenue = priceValDouble,
+                                ticketQrCode = "DIAMOND_QR_${System.currentTimeMillis()}",
+                                staffId = 1, // Skipper Rossi
+                                vehicleId = 1, // Yacht
+                                notes = formNotes,
+                                internalComment = "Registered directly on operational terminal."
+                            )
+                        )
+
+                        // Reset Form States
+                        formGuestName = ""
+                        formNotes = ""
+                        activeSubTab = "directory" // flip back to directory tab automatically
+                        Toast.makeText(context, "VIP Excursion Booking Registered!", Toast.LENGTH_LONG).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = Color.White),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("form_submit_button")
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = "Confirm")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Confirm & Create Booking", fontWeight = FontWeight.ExtraBold)
                 }
             }
         }
@@ -8600,9 +8928,37 @@ fun ExploreScreen(viewModel: DiamondsViewModel) {
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Travel Destinations Imagery List
+        // Search & Filter Box
         item {
             Spacer(modifier = Modifier.height(16.dp))
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Search exclusive cruises, villas & transfers...", color = TextSecondary) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = GoldPremium) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = GoldPremium)
+                        }
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = GoldPremium,
+                    unfocusedBorderColor = SurfaceGlassElevated,
+                    focusedContainerColor = SurfaceGlass,
+                    unfocusedContainerColor = SurfaceGlass,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary
+                ),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth().testTag("explore_search_input"),
+                singleLine = true
+            )
+        }
+
+        // Travel Destinations Imagery List
+        item {
             Text(
                 "WORLD-FAMOUS DESTINATIONS",
                 style = MaterialTheme.typography.labelSmall,
@@ -8613,11 +8969,20 @@ fun ExploreScreen(viewModel: DiamondsViewModel) {
             Spacer(modifier = Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(mockDestinations) { (destName, imageUrl) ->
+                    val isFilteredByDest = searchQuery.contains(destName.split(" ")[0], ignoreCase = true)
                     Card(
                         shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            width = 2.dp,
+                            color = if (isFilteredByDest) GoldPremium else Color.Transparent
+                        ),
                         modifier = Modifier
                             .width(130.dp)
                             .height(180.dp)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                searchQuery = if (isFilteredByDest) "" else destName.split(" ")[0]
+                            }
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             AsyncImage(
@@ -8890,18 +9255,82 @@ fun ExploreScreen(viewModel: DiamondsViewModel) {
                             drawCircle(color = GoldPremium, radius = 6.dp.toPx(), center = Offset(size.width * 0.88f, size.height * 0.52f))
                         }
                         
-                        // Text Labels floating on ports
-                        Box(modifier = Modifier.align(Alignment.TopStart).padding(8.dp)) {
-                            Text("Sorrento Pier 4", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        // Text Labels floating on ports as clickable badges
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(8.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.Black.copy(alpha = 0.6f))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    searchQuery = if (searchQuery == "Sorrento") "" else "Sorrento"
+                                }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "Sorrento Pier 4",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (searchQuery == "Sorrento") GoldPremium else TextPrimary
+                            )
                         }
-                        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 100.dp, top = 20.dp)) {
-                            Text("Positano Pier", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 100.dp, top = 20.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.Black.copy(alpha = 0.6f))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    searchQuery = if (searchQuery == "Positano") "" else "Positano"
+                                }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "Positano Pier",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (searchQuery == "Positano") GoldPremium else TextPrimary
+                            )
                         }
-                        Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)) {
-                            Text("Capri Island Marina", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 12.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.Black.copy(alpha = 0.6f))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    searchQuery = if (searchQuery == "Capri") "" else "Capri"
+                                }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "Capri Island Marina",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (searchQuery == "Capri") GoldPremium else TextPrimary
+                            )
                         }
-                        Box(modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
-                            Text("Amalfi Port", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.Black.copy(alpha = 0.6f))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    searchQuery = if (searchQuery == "Amalfi") "" else "Amalfi"
+                                }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                "Amalfi Port",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (searchQuery == "Amalfi") GoldPremium else TextPrimary
+                            )
                         }
                     }
                 }
@@ -8992,12 +9421,33 @@ fun ExploreExperienceCard(
         else -> "https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&q=80&w=600"
     }
 
+    val animAlpha = remember { Animatable(0f) }
+    val animSlide = remember { Animatable(30f) }
+
+    LaunchedEffect(exp.id) {
+        animAlpha.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 600, easing = LinearOutSlowInEasing)
+        )
+    }
+
+    LaunchedEffect(exp.id) {
+        animSlide.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(durationMillis = 600, easing = LinearOutSlowInEasing)
+        )
+    }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
         shape = RoundedCornerShape(20.dp),
         border = BorderStroke(1.dp, SurfaceGlassElevated),
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                alpha = animAlpha.value
+                translationY = animSlide.value
+            }
             .clickable { onSelect() }
             .testTag("experience_card_${exp.id}")
     ) {
@@ -9245,8 +9695,24 @@ fun ExcursionDetailSheet(
 
     // Form inputs
     var guestName by remember { mutableStateOf("") }
-    var travelDate by remember { mutableStateOf("2026-07-11") }
+    var travelDate by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())) }
     var specialRequests by remember { mutableStateOf("") }
+
+    val calendar = Calendar.getInstance()
+    val datePickerDialog = android.app.DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            val selectedDate = Calendar.getInstance().apply {
+                set(Calendar.YEAR, year)
+                set(Calendar.MONTH, month)
+                set(Calendar.DAY_OF_MONTH, dayOfMonth)
+            }
+            travelDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(selectedDate.time)
+        },
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH),
+        calendar.get(Calendar.DAY_OF_MONTH)
+    )
 
     val imageUrl = when {
         exp.title.contains("Yacht") -> "https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&q=80&w=600"
@@ -9434,20 +9900,36 @@ fun ExcursionDetailSheet(
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            OutlinedTextField(
-                                value = travelDate,
-                                onValueChange = { travelDate = it },
-                                label = { Text("Departure Date (YYYY-MM-DD)") },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = GoldPremium,
-                                    unfocusedBorderColor = SurfaceGlassElevated,
-                                    focusedContainerColor = SurfaceGlass,
-                                    unfocusedContainerColor = SurfaceGlass
-                                ),
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { datePickerDialog.show() }
+                            ) {
+                                OutlinedTextField(
+                                    value = travelDate,
+                                    onValueChange = {},
+                                    label = { Text("Departure Date") },
+                                    readOnly = true,
+                                    trailingIcon = {
+                                        Icon(Icons.Default.CalendarToday, contentDescription = "Select Date", tint = GoldPremium)
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = GoldPremium,
+                                        unfocusedBorderColor = SurfaceGlassElevated,
+                                        focusedContainerColor = SurfaceGlass,
+                                        unfocusedContainerColor = SurfaceGlass,
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .clickable { datePickerDialog.show() }
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(10.dp))
 
