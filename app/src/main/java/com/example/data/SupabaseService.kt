@@ -117,7 +117,8 @@ class SupabaseService {
         staffList: List<Staff>,
         customerList: List<Customer>,
         vehicleList: List<Vehicle>,
-        bookingList: List<Booking>
+        bookingList: List<Booking>,
+        experienceList: List<Experience>
     ): SyncReport = withContext(Dispatchers.IO) {
         if (!isConfigured()) {
             return@withContext SyncReport(
@@ -174,6 +175,15 @@ class SupabaseService {
                 reports.add(staffResult)
             } else {
                 reports.add(TableSyncResult("employees", true, "No staff to sync.", 0))
+            }
+
+            // 4a. Sync Experiences
+            val experiencesJson = buildExperiencesJson(experienceList)
+            if (experienceList.isNotEmpty()) {
+                val experiencesResult = sendUpsertRequest(url, key, "experiences", experiencesJson)
+                reports.add(experiencesResult)
+            } else {
+                reports.add(TableSyncResult("experiences", true, "No experiences to sync.", 0))
             }
 
             // 5. Sync Bookings
@@ -286,7 +296,10 @@ class SupabaseService {
               "hourly_rate": 250.00,
               "status": "$statusMapped",
               "current_gps_lat": 40.634,
-              "current_gps_lon": 14.603
+              "current_gps_lon": 14.603,
+              "fuel_level": ${vehicle.fuelLevel},
+              "last_maintenance": "${escapeJson(vehicle.lastMaintenance)}",
+              "insurance_expiry": "${escapeJson(vehicle.insuranceExpiry)}"
             }
             """.trimIndent()
         }
@@ -309,7 +322,37 @@ class SupabaseService {
               "email": "${escapeJson(customer.phoneNumber.replace("+", "") + "@diamonds.elite")}",
               "phone": "${escapeJson(customer.phoneNumber)}",
               "tier": "$tierMapped",
-              "notes": "${escapeJson(customer.internalNotes)}"
+              "notes": "${escapeJson(customer.internalNotes)}",
+              "passport_number": "${escapeJson(customer.passportNumber)}",
+              "nationality": "${escapeJson(customer.nationality)}",
+              "emergency_contact": "${escapeJson(customer.emergencyContact)}",
+              "pickup_hotel": "${escapeJson(customer.pickupHotel)}",
+              "room_number": "${escapeJson(customer.roomNumber)}",
+              "language": "${escapeJson(customer.language)}",
+              "blacklist": ${customer.blacklist}
+            }
+            """.trimIndent()
+        }
+        return "[${rows.joinToString(",")}]"
+    }
+
+    private fun buildExperiencesJson(experiences: List<Experience>): String {
+        val rows = experiences.map { exp ->
+            val uuid = getDeterministicUuid("experience", exp.id)
+            """
+            {
+              "id": "$uuid",
+              "company_id": "$defaultCompanyId",
+              "title": "${escapeJson(exp.title)}",
+              "description": "${escapeJson(exp.description)}",
+              "price": ${exp.price},
+              "capacity": ${exp.capacity},
+              "duration": "${escapeJson(exp.duration)}",
+              "difficulty": "${escapeJson(exp.difficulty)}",
+              "pickup_location": "${escapeJson(exp.pickupLocation)}",
+              "image_url": "${escapeJson(exp.imageUrl)}",
+              "featured": ${exp.featured},
+              "status": "${escapeJson(exp.status)}"
             }
             """.trimIndent()
         }
@@ -339,7 +382,18 @@ class SupabaseService {
               "last_name": "${escapeJson(lastName)}",
               "role": "$roleMapped",
               "biometrics_enrolled": true,
-              "device_token": "android_node_sync_dev"
+              "device_token": "android_node_sync_dev",
+              "phone_number": "${escapeJson(staff.phoneNumber)}",
+              "attendance_status": "${escapeJson(staff.attendanceStatus)}",
+              "rating": ${staff.rating},
+              "performance_score": ${staff.performanceScore},
+              "certificate_url": "${escapeJson(staff.certificateUrl)}",
+              "password_hash": "${escapeJson(staff.passwordHash)}",
+              "security_question": "${escapeJson(staff.securityQuestion)}",
+              "security_answer": "${escapeJson(staff.securityAnswer)}",
+              "is_two_factor_enabled": ${staff.isTwoFactorEnabled},
+              "login_attempts": ${staff.loginAttempts},
+              "is_locked": ${staff.isLocked}
             }
             """.trimIndent()
         }
@@ -352,6 +406,7 @@ class SupabaseService {
             val customerUuid = getDeterministicUuid("customer", booking.customerId)
             val vehicleUuid = getDeterministicUuid("vehicle", booking.vehicleId)
             val staffUuid = getDeterministicUuid("staff", booking.staffId)
+            val experienceUuid = getDeterministicUuid("experience", booking.experienceId)
             val statusMapped = when (booking.status.lowercase()) {
                 "pending" -> "pending"
                 "confirmed", "paid" -> "confirmed"
@@ -370,13 +425,19 @@ class SupabaseService {
               "customer_id": "$customerUuid",
               "fleet_id": "$vehicleUuid",
               "primary_staff_id": "$staffUuid",
+              "experience_id": "$experienceUuid",
+              "experience_title": "${escapeJson(booking.experienceTitle)}",
               "start_time": "$startTime",
               "end_time": "$endTime",
               "status": "$statusMapped",
               "total_price": ${booking.revenue},
               "pickup_location": "${escapeJson(booking.notes.take(50))}",
               "dropoff_location": "${escapeJson(booking.internalComment.take(50))}",
-              "pax_count": 4
+              "pax_count": 4,
+              "time_slot": "${escapeJson(booking.timeSlot)}",
+              "ticket_qr_code": "${escapeJson(booking.ticketQrCode)}",
+              "notes": "${escapeJson(booking.notes)}",
+              "internal_comment": "${escapeJson(booking.internalComment)}"
             }
             """.trimIndent()
         }

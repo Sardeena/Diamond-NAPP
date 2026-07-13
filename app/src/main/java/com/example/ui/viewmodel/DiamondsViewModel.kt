@@ -627,7 +627,11 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
 
     fun updateStaffAttendance(staffMember: Staff, status: String) {
         viewModelScope.launch {
-            repository.updateStaff(staffMember.copy(attendanceStatus = status))
+            val updated = staffMember.copy(attendanceStatus = status)
+            repository.updateStaff(updated)
+            if (loggedInUser.value?.id == updated.id) {
+                loggedInUser.value = updated
+            }
             addNotification(
                 title = "Staff Attendance",
                 description = "${staffMember.name} attendance marked as $status.",
@@ -951,7 +955,8 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
                 staffList = staff.value,
                 customerList = customers.value,
                 vehicleList = vehicles.value,
-                bookingList = bookings.value
+                bookingList = bookings.value,
+                experienceList = experiences.value
             )
 
             supabaseSyncReport.value = result

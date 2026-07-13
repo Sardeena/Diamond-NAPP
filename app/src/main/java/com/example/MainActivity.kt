@@ -41,6 +41,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -2097,6 +2099,60 @@ fun BulletinShimmer(brush: Brush) {
     }
 }
 
+@Composable
+fun ChartCardShimmer(brush: Brush) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, SurfaceGlassElevated),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Box(modifier = Modifier.size(140.dp, 12.dp).background(brush, RoundedCornerShape(4.dp)))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(modifier = Modifier.size(90.dp, 24.dp).background(brush, RoundedCornerShape(4.dp)))
+                }
+                Box(modifier = Modifier.size(110.dp, 20.dp).background(brush, RoundedCornerShape(8.dp)))
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(116.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                val heights = listOf(35.dp, 70.dp, 50.dp, 95.dp, 60.dp, 80.dp, 45.dp)
+                heights.forEach { h ->
+                    Box(
+                        modifier = Modifier
+                            .width(28.dp)
+                            .height(h)
+                            .background(brush, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                repeat(7) {
+                    Box(modifier = Modifier.size(24.dp, 10.dp).background(brush, RoundedCornerShape(2.dp)))
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwipeableBookingItem(
@@ -2274,6 +2330,7 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
     val staff by viewModel.staff.collectAsStateWithLifecycle()
     val notifications by viewModel.notifications.collectAsStateWithLifecycle()
     val customers by viewModel.customers.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
 
     val totalRevenue = bookings.filter { it.status != "Cancelled" }.sumOf { it.revenue }
     val pendingBookings = bookings.filter { it.status == "Pending" }.size
@@ -2335,11 +2392,15 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
     val scope = rememberCoroutineScope()
 
     PullToRefreshBox(
-        isRefreshing = isLoading,
+        isRefreshing = isLoading || isSyncing,
         onRefresh = {
             scope.launch {
                 isLoading = true
-                delay(1200)
+                if (viewModel.isSupabaseConfigured()) {
+                    viewModel.syncDataWithSupabase()
+                } else {
+                    delay(1200)
+                }
                 isLoading = false
             }
         },
@@ -2558,7 +2619,11 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
         }
 
         item {
-            WeeklyRevenueChartCard(bookings = bookings)
+            if (isLoading || isSyncing) {
+                ChartCardShimmer(brush = shimmerBrush())
+            } else {
+                WeeklyRevenueChartCard(bookings = bookings)
+            }
         }
 
         // Analytics / KPI Stats Grid
@@ -2571,7 +2636,7 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (isLoading) {
+            if (isLoading || isSyncing) {
                 val brush = shimmerBrush()
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Box(modifier = Modifier.weight(1f)) { KpiCardShimmer(brush) }
@@ -2633,7 +2698,7 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
         }
 
         // Live Operational Bulletins / Notifications Center
-        if (isLoading || notifications.isNotEmpty()) {
+        if (isLoading || isSyncing || notifications.isNotEmpty()) {
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -2646,7 +2711,7 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                         color = TextMuted,
                         letterSpacing = 1.5.sp
                     )
-                    if (!isLoading) {
+                    if (!isLoading && !isSyncing) {
                         TextButton(onClick = { viewModel.clearAllNotifications() }) {
                             Text("Clear", color = GoldPremium, style = MaterialTheme.typography.bodySmall)
                         }
@@ -2708,7 +2773,7 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                 }
             }
 
-            if (isLoading) {
+            if (isLoading || isSyncing) {
                 items(2) {
                     BulletinShimmer(brush = shimmerBrush())
                     Spacer(modifier = Modifier.height(8.dp))
@@ -2775,7 +2840,7 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
              booking.experienceTitle.contains(recentExcursionsSearchQuery, ignoreCase = true))
         }
 
-        if (isLoading) {
+        if (isLoading || isSyncing) {
             items(2) {
                 BookingCardShimmer(brush = shimmerBrush())
             }
@@ -2920,7 +2985,7 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
             matchesSearch && matchesCategory
         }
 
-        if (isLoading) {
+        if (isLoading || isSyncing) {
             items(2) {
                 ExcursionCardShimmer(brush = shimmerBrush())
             }
@@ -9196,7 +9261,149 @@ fun DiamondsFloatingAdminMenu(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    // Admin Active Duty Command Center Card
+                    val user = loggedInUser
+                    val isUserOnDuty = user?.attendanceStatus == "Present"
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isUserOnDuty) GoldPremium.copy(alpha = 0.08f) else SurfaceGlass
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (isUserOnDuty) GoldPremium.copy(alpha = 0.5f) else SurfaceGlassElevated
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("admin_duty_card")
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    // Pulsing indicator icon
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(24.dp)) {
+                                        if (isUserOnDuty) {
+                                            // Glow ring behind
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(24.dp)
+                                                    .clip(CircleShape)
+                                                    .background(StatusLiveGreen.copy(alpha = (pulseScale - 0.7f).coerceAtLeast(0.05f)))
+                                            )
+                                        }
+                                        Icon(
+                                            imageVector = if (isUserOnDuty) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                                            contentDescription = null,
+                                            tint = if (isUserOnDuty) StatusLiveGreen else TextMuted,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "ADMIN ACTIVE SHIFT DUTY",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isUserOnDuty) GoldPremium else TextPrimary,
+                                            letterSpacing = 1.sp
+                                        )
+                                        Text(
+                                            text = if (isUserOnDuty) "Active • Transmitting Live Status" else "Standby • Offline Excursion Dispatch",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isUserOnDuty) TextPrimary else TextSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+
+                                Switch(
+                                    checked = isUserOnDuty,
+                                    onCheckedChange = { checked ->
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        if (user != null) {
+                                            val newStatus = if (checked) "Present" else "Absent"
+                                            viewModel.updateStaffAttendance(user, newStatus)
+
+                                            // Log the operational security event
+                                            val actionText = if (checked) "activated active admin duty shift" else "deactivated duty shift to standby"
+                                            viewModel.addSecurityLog("ADMIN_DUTY_TOGGLE", "Administrator ${user.name} $actionText.")
+                                            viewModel.triggerSystemNotification(
+                                                "Duty Status Updated",
+                                                "You are now ${if (checked) "On-Duty" else "Off-Duty/Standby"}"
+                                            )
+                                        }
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = SlateDarkBg,
+                                        checkedTrackColor = GoldPremium,
+                                        uncheckedThumbColor = TextMuted,
+                                        uncheckedTrackColor = SurfaceGlassElevated
+                                    ),
+                                    modifier = Modifier.testTag("admin_duty_switch")
+                                )
+                            }
+
+                            if (isUserOnDuty) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 12.dp),
+                                    color = GoldPremium.copy(alpha = 0.2f)
+                                )
+                                // Active duty telemetry or quick administrative actions
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Quick log broadcast
+                                    Button(
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.addSecurityLog("SYSTEM_ALERT", "Active Administrator broadcasted system-wide alive signal.")
+                                            viewModel.triggerSystemNotification("Broadcast Successful", "Operations center pinged with alive signal.")
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = GoldPremium.copy(alpha = 0.15f)),
+                                        border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.4f)),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f).height(36.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Send, contentDescription = null, tint = GoldPremium, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Ping Ops", color = GoldPremium, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                    }
+
+                                    // Emergency Alert Broadcast
+                                    Button(
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.addSecurityLog("SECURITY_ALERT", "CRITICAL: Admin declared a fleet-wide emergency response protocol.")
+                                            viewModel.triggerSystemNotification("EMERGENCY PROTOCOL", "All guides and captains alerted. Channels secured.")
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = StatusErrorRed.copy(alpha = 0.15f)),
+                                        border = BorderStroke(1.dp, StatusErrorRed.copy(alpha = 0.4f)),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f).height(36.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Emergency, contentDescription = null, tint = StatusErrorRed, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Emergency", color = StatusErrorRed, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     Text(
                         text = "ADMINISTRATIVE CONTROL PANELS",
@@ -9378,6 +9585,20 @@ fun DiamondsFloatingAdminMenu(
                     tint = Color.White,
                     modifier = Modifier.size(32.dp)
                 )
+
+                // On-duty green active dot badge
+                val isOnDuty = loggedInUser?.attendanceStatus == "Present"
+                if (isOnDuty) {
+                    Box(
+                        modifier = Modifier
+                            .size(14.dp)
+                            .align(Alignment.TopEnd)
+                            .padding(top = 4.dp, end = 4.dp)
+                            .clip(CircleShape)
+                            .background(StatusLiveGreen)
+                            .border(BorderStroke(1.5.dp, SlateDarkBg), CircleShape)
+                    )
+                }
             }
         }
     }
@@ -9597,13 +9818,19 @@ fun WeeklyRevenueChartCard(bookings: List<Booking>) {
         "2026-07-14" to "Tue"
     )
 
-    // Compute revenue for each of the 7 days
-    val revenues = last7Days.map { (dateStr, _) ->
-        bookings.filter { it.date == dateStr && it.status != "Cancelled" }.sumOf { it.revenue }.toFloat()
+    // Compute stats for each day: date, dayName, revenue, count
+    val dayStats = last7Days.map { (dateStr, dayName) ->
+        val dayBookings = bookings.filter { it.date == dateStr && it.status != "Cancelled" }
+        val revenue = dayBookings.sumOf { it.revenue }.toFloat()
+        val count = dayBookings.size
+        Triple(dayName, revenue, count)
     }
 
-    val totalWeekRevenue = revenues.sum()
-    val maxRevenue = (revenues.maxOrNull() ?: 100f).coerceAtLeast(100f)
+    val totalWeekRevenue = dayStats.sumOf { it.second.toDouble() }
+    val maxRevenue = (dayStats.maxOfOrNull { it.second } ?: 100f).coerceAtLeast(100f)
+    val todayRevenue = dayStats.find { last7Days[dayStats.indexOf(it)].first == "2026-07-13" }?.second ?: 0f
+
+    var activeIndex by remember { mutableStateOf<Int?>(null) }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
@@ -9618,11 +9845,11 @@ fun WeeklyRevenueChartCard(bookings: List<Booking>) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Column {
                     Text(
-                        text = "WEEKLY REVENUE TREND",
+                        text = "REVENUE PERFORMANCE DECK",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextMuted,
                         letterSpacing = 1.5.sp
@@ -9634,45 +9861,118 @@ fun WeeklyRevenueChartCard(bookings: List<Booking>) {
                         fontWeight = FontWeight.Bold,
                         color = GoldPremium
                     )
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(StatusLiveGreen.copy(alpha = 0.15f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
                     Text(
-                        text = "+12.4% vs last week",
-                        color = StatusLiveGreen,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp
+                        text = "Weekly aggregate • Today: €${String.format("%,.0f", todayRevenue)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
                     )
                 }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(StatusLiveGreen.copy(alpha = 0.15f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "LIVE TREND",
+                            color = StatusLiveGreen,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp
+                        )
+                    }
+                    if (activeIndex != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Reset selection",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = GoldPremium,
+                            fontSize = 10.sp,
+                            modifier = Modifier
+                                .clickable { activeIndex = null }
+                                .padding(2.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Recharts-style Legend Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp, 3.dp)
+                        .background(GoldPremium, RoundedCornerShape(2.dp))
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(GoldPremium, CircleShape)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Daily Revenue (€)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    fontSize = 11.sp
+                )
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(10.dp, 3.dp)
+                        .background(StatusLiveGreen, RoundedCornerShape(2.dp))
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Weekly growth curve",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    fontSize = 11.sp
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Line Chart Canvas
+            // Line Chart Canvas with interactive box wrapper
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(160.dp)
             ) {
                 Canvas(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = 24.dp, start = 8.dp, end = 8.dp)
+                        .padding(bottom = 24.dp, start = 12.dp, end = 12.dp)
+                        .pointerInput(dayStats) {
+                            detectTapGestures { offset ->
+                                val width = this@pointerInput.size.width.toFloat()
+                                val spacing = width / (dayStats.size - 1)
+                                val index = ((offset.x / spacing) + 0.5f)
+                                    .toInt()
+                                    .coerceIn(0, dayStats.size - 1)
+                                activeIndex = index
+                            }
+                        }
                 ) {
                     val width = size.width
                     val height = size.height
-                    val spacing = width / (revenues.size - 1)
+                    val spacing = width / (dayStats.size - 1)
 
-                    // Draw helper horizontal grid lines (3 lines)
+                    // Draw helper horizontal grid lines (CartesianGrid)
                     val gridLines = 3
                     for (i in 0..gridLines) {
                         val y = height * i / gridLines
                         drawLine(
-                            color = SurfaceGlassElevated.copy(alpha = 0.4f),
+                            color = SurfaceGlassElevated.copy(alpha = 0.35f),
                             start = Offset(0f, y),
                             end = Offset(width, y),
                             strokeWidth = 1f
@@ -9680,15 +9980,31 @@ fun WeeklyRevenueChartCard(bookings: List<Booking>) {
                     }
 
                     // Create connection points for the path
-                    val points = revenues.mapIndexed { index, revenue ->
+                    val points = dayStats.mapIndexed { index, (_, rev, _) ->
                         val x = index * spacing
-                        // Invert y because (0,0) is top-left
-                        val normalizedY = if (maxRevenue > 0) revenue / maxRevenue else 0f
-                        val y = height - (normalizedY * height * 0.85f) // offset slightly from top
+                        val normalizedY = if (maxRevenue > 0) rev / maxRevenue else 0f
+                        val y = height - (normalizedY * height * 0.82f) // slightly offset from top
                         Offset(x, y)
                     }
 
-                    // Draw background gradient under the curve
+                    // Draw the Recharts vertical cursor guide line
+                    activeIndex?.let { index ->
+                        if (index in points.indices) {
+                            val activeX = points[index].x
+                            drawLine(
+                                color = TextMuted.copy(alpha = 0.5f),
+                                start = Offset(activeX, 0f),
+                                end = Offset(activeX, height),
+                                strokeWidth = 1.5.dp.toPx(),
+                                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
+                                    floatArrayOf(10f, 10f),
+                                    0f
+                                )
+                            )
+                        }
+                    }
+
+                    // Draw background gradient area
                     if (points.isNotEmpty()) {
                         val fillPath = Path().apply {
                             moveTo(points.first().x, height)
@@ -9702,7 +10018,7 @@ fun WeeklyRevenueChartCard(bookings: List<Booking>) {
                             path = fillPath,
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    GoldPremium.copy(alpha = 0.35f),
+                                    GoldPremium.copy(alpha = 0.28f),
                                     Color.Transparent
                                 ),
                                 startY = 0f,
@@ -9711,12 +10027,11 @@ fun WeeklyRevenueChartCard(bookings: List<Booking>) {
                         )
                     }
 
-                    // Draw the primary trend line (smoothed line)
+                    // Draw the primary trend curve (cubic-bezier)
                     if (points.isNotEmpty()) {
                         val strokePath = Path().apply {
                             moveTo(points.first().x, points.first().y)
                             for (i in 1 until points.size) {
-                                // Simple bezier connection for smooth rendering
                                 val p0 = points[i - 1]
                                 val p1 = points[i]
                                 val controlPoint1 = Offset(p0.x + spacing / 2, p0.y)
@@ -9737,37 +10052,122 @@ fun WeeklyRevenueChartCard(bookings: List<Booking>) {
                             )
                         )
 
-                        // Draw golden dots and outer halo on each peak
+                        // Draw daily dots and glowing halos
                         points.forEachIndexed { index, point ->
-                            drawCircle(
-                                color = SlateDarkBg,
-                                radius = 5.dp.toPx(),
-                                center = point
-                            )
-                            drawCircle(
-                                color = GoldPremium,
-                                radius = 3.dp.toPx(),
-                                center = point
-                            )
+                            val isSelected = (index == activeIndex)
+                            val isToday = (last7Days[index].first == "2026-07-13")
+
+                            if (isSelected) {
+                                // Double ring pulsing halo
+                                drawCircle(
+                                    color = GoldPremium.copy(alpha = 0.2f),
+                                    radius = 12.dp.toPx(),
+                                    center = point
+                                )
+                                drawCircle(
+                                    color = GoldPremium,
+                                    radius = 6.dp.toPx(),
+                                    center = point
+                                )
+                                drawCircle(
+                                    color = SlateDarkBg,
+                                    radius = 3.dp.toPx(),
+                                    center = point
+                                )
+                            } else if (isToday) {
+                                // Subtle today alert marker
+                                drawCircle(
+                                    color = StatusLiveGreen.copy(alpha = 0.25f),
+                                    radius = 9.dp.toPx(),
+                                    center = point
+                                )
+                                drawCircle(
+                                    color = StatusLiveGreen,
+                                    radius = 5.dp.toPx(),
+                                    center = point
+                                )
+                            } else {
+                                // Default simple dots
+                                drawCircle(
+                                    color = SlateDarkBg,
+                                    radius = 4.dp.toPx(),
+                                    center = point
+                                )
+                                drawCircle(
+                                    color = GoldPremium,
+                                    radius = 2.5.dp.toPx(),
+                                    center = point
+                                )
+                            }
                         }
                     }
                 }
 
-                // X Axis Day labels at bottom
+                // X-Axis Day Labels at the bottom
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .align(Alignment.BottomCenter),
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    last7Days.forEach { (_, dayName) ->
+                    last7Days.forEachIndexed { index, (_, dayName) ->
+                        val isSelected = (index == activeIndex)
+                        val isToday = (last7Days[index].first == "2026-07-13")
                         Text(
-                            text = dayName,
+                            text = if (isToday) "Today" else dayName,
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextMuted,
+                            color = when {
+                                isSelected -> GoldPremium
+                                isToday -> StatusLiveGreen
+                                else -> TextMuted
+                            },
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Medium
                         )
+                    }
+                }
+
+                // Recharts Floating Glass Tooltip Overlay
+                activeIndex?.let { index ->
+                    if (index in dayStats.indices) {
+                        val stats = dayStats[index]
+                        val fullDateStr = last7Days[index].first
+                        val isToday = (fullDateStr == "2026-07-13")
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E24).copy(alpha = 0.95f)),
+                            border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .align(if (index < 4) Alignment.TopEnd else Alignment.TopStart)
+                                .padding(8.dp)
+                                .width(150.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text(
+                                    text = if (isToday) "Today (Mon, Jul 13)" else "${stats.first} ($fullDateStr)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isToday) StatusLiveGreen else TextSecondary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Revenue:", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                                    Text("€${String.format("%,.0f", stats.second)}", style = MaterialTheme.typography.bodySmall, color = GoldPremium, fontWeight = FontWeight.Bold)
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Trips:", style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                                    Text("${stats.third} bookings", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                                }
+                            }
+                        }
                     }
                 }
             }
