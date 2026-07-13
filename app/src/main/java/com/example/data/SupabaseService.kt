@@ -21,16 +21,86 @@ class SupabaseService {
     // Deterministic Company ID for this multi-tenant layout
     val defaultCompanyId = UUID.nameUUIDFromBytes("company_diamonds_elite".toByteArray()).toString()
 
+    private var resolvedUrl: String = ""
+    private var resolvedKey: String = ""
+    private var isResolved = false
+
+    private fun resolveConfig() {
+        if (isResolved) return
+        val rawUrl = BuildConfig.SUPABASE_URL.trim()
+        val rawKey = BuildConfig.SUPABASE_KEY.trim()
+
+        var detectedUrl = ""
+        var anonKey = ""
+        var serviceKey = ""
+
+        fun checkValue(value: String) {
+            if (value.startsWith("http://") || value.startsWith("https://")) {
+                detectedUrl = value
+            } else if (value.startsWith("eyJ")) {
+                try {
+                    val parts = value.split(".")
+                    if (parts.size >= 2) {
+                        val payloadBytes = android.util.Base64.decode(
+                            parts[1],
+                            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
+                        )
+                        val payload = String(payloadBytes, Charsets.UTF_8)
+                        
+                        val refRegex = "\"ref\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                        val refMatch = refRegex.find(payload)
+                        val ref = refMatch?.groupValues?.get(1)
+                        if (ref != null && detectedUrl.isEmpty()) {
+                            detectedUrl = "https://$ref.supabase.co"
+                        }
+
+                        val roleRegex = "\"role\"\\s*:\\s*\"([^\"]+)\"".toRegex()
+                        val roleMatch = roleRegex.find(payload)
+                        val role = roleMatch?.groupValues?.get(1)
+                        if (role == "service_role") {
+                            serviceKey = value
+                        } else {
+                            anonKey = value
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("SupabaseService", "Error decoding potential JWT: ${e.localizedMessage}")
+                }
+            }
+        }
+
+        checkValue(rawUrl)
+        checkValue(rawKey)
+
+        resolvedUrl = detectedUrl
+        resolvedKey = when {
+            serviceKey.isNotEmpty() -> serviceKey
+            anonKey.isNotEmpty() -> anonKey
+            rawKey.isNotEmpty() && !rawKey.startsWith("your-supabase-api-key-placeholder") -> rawKey
+            else -> rawUrl
+        }
+        isResolved = true
+    }
+
+    fun getBaseUrl(): String {
+        resolveConfig()
+        return resolvedUrl
+    }
+
+    fun getApiKey(): String {
+        resolveConfig()
+        return resolvedKey
+    }
+
     /**
      * Checks if Supabase credentials have been properly configured by the user.
      */
     fun isConfigured(): Boolean {
-        val url = BuildConfig.SUPABASE_URL
-        val key = BuildConfig.SUPABASE_KEY
-        return url.isNotEmpty() && 
-               !url.startsWith("https://placeholder") && 
-               key.isNotEmpty() && 
-               key != "your-supabase-api-key-placeholder"
+        resolveConfig()
+        return resolvedUrl.isNotEmpty() && 
+               !resolvedUrl.contains("placeholder") && 
+               resolvedKey.isNotEmpty() && 
+               resolvedKey != "your-supabase-api-key-placeholder"
     }
 
     /**
@@ -57,8 +127,8 @@ class SupabaseService {
             )
         }
 
-        val url = BuildConfig.SUPABASE_URL.removeSuffix("/")
-        val key = BuildConfig.SUPABASE_KEY
+        val url = getBaseUrl().removeSuffix("/")
+        val key = getApiKey()
         val reports = mutableListOf<TableSyncResult>()
 
         try {
@@ -324,20 +394,35 @@ class SupabaseService {
     /**
      * Signs up a user in Supabase Auth.
      */
-    suspend fun signUp(email: String, password: String): AuthResult = withContext(Dispatchers.IO) {
+    suspend fun signUp(email: String, password: String, name: String = "", phone: String = ""): AuthResult = withContext(Dispatchers.IO) {
         if (!isConfigured()) {
             return@withContext AuthResult(false, "Supabase is not configured yet.")
         }
-        val url = BuildConfig.SUPABASE_URL.removeSuffix("/")
-        val key = BuildConfig.SUPABASE_KEY
+        val url = getBaseUrl().removeSuffix("/")
+        val key = getApiKey()
 
         val mediaType = "application/json; charset=utf-8".toMediaType()
-        val json = """
+        val json = try {
+            val root = org.json.JSONObject()
+            root.put("email", email)
+            root.put("password", password)
+            
+            val options = org.json.JSONObject()
+            val data = org.json.JSONObject()
+            data.put("full_name", name)
+            data.put("phone", phone)
+            options.put("data", data)
+            root.put("options", options)
+            
+            root.toString()
+        } catch (e: Exception) {
+            """
             {
               "email": "${escapeJson(email)}",
               "password": "${escapeJson(password)}"
             }
-        """.trimIndent()
+            """.trimIndent()
+        }
 
         val requestBody = json.toRequestBody(mediaType)
         val request = Request.Builder()
@@ -372,8 +457,8 @@ class SupabaseService {
         if (!isConfigured()) {
             return@withContext AuthResult(false, "Supabase is not configured yet.")
         }
-        val url = BuildConfig.SUPABASE_URL.removeSuffix("/")
-        val key = BuildConfig.SUPABASE_KEY
+        val url = getBaseUrl().removeSuffix("/")
+        val key = getApiKey()
 
         val mediaType = "application/json; charset=utf-8".toMediaType()
         val json = """
@@ -396,7 +481,26 @@ class SupabaseService {
                 val code = response.code
                 val responseBody = response.body?.string() ?: ""
                 if (response.isSuccessful || code == 200 || code == 201) {
-                    AuthResult(true, "Success")
+                    var name: String? = null
+                    var phone: String? = null
+                    try {
+                        val root = org.json.JSONObject(responseBody)
+                        if (root.has("user")) {
+                            val user = root.getJSONObject("user")
+                            if (user.has("user_metadata")) {
+                                val meta = user.getJSONObject("user_metadata")
+                                if (meta.has("full_name")) {
+                                    name = meta.getString("full_name")
+                                }
+                                if (meta.has("phone")) {
+                                    phone = meta.getString("phone")
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("SupabaseService", "Error parsing user metadata from token response", e)
+                    }
+                    AuthResult(true, "Success", name, phone)
                 } else {
                     Log.e("SupabaseService", "Sign in failed: $code - $responseBody")
                     val errMsg = parseSupabaseError(responseBody) ?: "Invalid credentials"
@@ -436,7 +540,9 @@ class SupabaseService {
 
 data class AuthResult(
     val success: Boolean,
-    val message: String
+    val message: String,
+    val userName: String? = null,
+    val userPhone: String? = null
 )
 
 data class SyncReport(

@@ -68,6 +68,7 @@ import coil.compose.AsyncImage
 import com.example.data.*
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.DiamondsViewModel
+import com.example.ui.screens.CheckoutScreen
 import com.example.ui.viewmodel.NotificationItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -373,6 +374,7 @@ fun DiamondsApp(viewModel: DiamondsViewModel = viewModel()) {
                             "reports" -> ReportsScreen(viewModel)
                             "settings" -> SettingsScreen(viewModel)
                             "profile" -> ProfileScreen(viewModel)
+                            "checkout" -> CheckoutScreen(viewModel)
                         }
                     }
                 }
@@ -448,7 +450,7 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
     var regEmail by remember { mutableStateOf("") }
     var regPassword by remember { mutableStateOf("") }
     var regConfirmPassword by remember { mutableStateOf("") }
-    var regRole by remember { mutableStateOf("Manager") }
+    var regRole by remember { mutableStateOf("User") }
     var regPhone by remember { mutableStateOf("") }
     val securityQuestionsList = listOf(
         "What was the name of your first pet?",
@@ -928,35 +930,14 @@ fun LoginScreen(viewModel: DiamondsViewModel) {
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Role Picker
-                            Text("Assigned Domain Role:", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                listOf("Manager", "Boat Captain", "Guide", "Driver").forEach { role ->
-                                    val isSel = regRole == role
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .border(1.dp, if (isSel) GoldPremium else SurfaceGlassElevated, RoundedCornerShape(8.dp))
-                                            .background(if (isSel) GoldPremium.copy(alpha = 0.15f) else SurfaceGlass)
-                                            .clickable { regRole = role }
-                                            .padding(vertical = 8.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = role.replace("Boat ", ""),
-                                            color = if (isSel) GoldPremium else TextSecondary,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                }
-                            }
+                            // Role Picker (Automatically Assigned as User)
+                            Text(
+                                text = "Assigned Domain Role: User",
+                                color = GoldPremium,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
 
                             Spacer(modifier = Modifier.height(12.dp))
 
@@ -5601,7 +5582,7 @@ fun SettingsScreen(viewModel: DiamondsViewModel) {
                     Text("Supabase Target Host", color = TextSecondary)
                     Text(
                         text = if (isSupabaseConfigured) {
-                            val host = com.example.BuildConfig.SUPABASE_URL.removePrefix("https://").removeSuffix("/")
+                            val host = viewModel.getResolvedSupabaseUrl().removePrefix("https://").removeSuffix("/")
                             if (host.length > 25) host.take(22) + "..." else host
                         } else "None configured",
                         color = TextPrimary
@@ -8999,24 +8980,22 @@ fun ExcursionDetailSheet(
                                 Button(
                                     onClick = {
                                         if (guestName.isNotEmpty()) {
-                                            viewModel.addBooking(
-                                                Booking(
-                                                    customerId = 1,
-                                                    customerName = guestName,
-                                                    experienceId = exp.id,
-                                                    experienceTitle = exp.title,
-                                                    date = travelDate,
-                                                    timeSlot = "10:00 - 14:00",
-                                                    status = "Pending",
-                                                    revenue = exp.price,
-                                                    ticketQrCode = "QR_EXCLUSIV_${System.currentTimeMillis()}",
-                                                    vehicleId = 1,
-                                                    staffId = 1,
-                                                    notes = specialRequests,
-                                                    internalComment = "Registered via Elite Travel App"
-                                                )
+                                            viewModel.pendingCheckoutBooking.value = Booking(
+                                                customerId = 1,
+                                                customerName = guestName,
+                                                experienceId = exp.id,
+                                                experienceTitle = exp.title,
+                                                date = travelDate,
+                                                timeSlot = "10:00 - 14:00",
+                                                status = "Pending",
+                                                revenue = exp.price,
+                                                ticketQrCode = "QR_EXCLUSIV_${System.currentTimeMillis()}",
+                                                vehicleId = 1,
+                                                staffId = 1,
+                                                notes = specialRequests,
+                                                internalComment = "Initiated via Elite Travel Checkout"
                                             )
-                                            Toast.makeText(context, "VIP Booking Created Successfully!", Toast.LENGTH_LONG).show()
+                                            viewModel.currentScreen.value = "checkout"
                                             onDismiss()
                                         } else {
                                             Toast.makeText(context, "Please enter Guest Name", Toast.LENGTH_SHORT).show()
@@ -9025,7 +9004,7 @@ fun ExcursionDetailSheet(
                                     colors = ButtonDefaults.buttonColors(containerColor = GoldPremium),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
-                                    Text("Confirm Booking", fontWeight = FontWeight.Bold)
+                                    Text("Proceed to Checkout", fontWeight = FontWeight.Bold)
                                 }
                             }
                         }

@@ -32,12 +32,15 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
     val staff = repository.allStaff.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     // UI state states
-    val currentScreen = MutableStateFlow("explore") // explore, dashboard, bookings, experiences, customers, calendar, staff, fleet, reports, settings, profile, qr_scan, favorites
+    val currentScreen = MutableStateFlow("explore") // explore, dashboard, bookings, experiences, customers, calendar, staff, fleet, reports, settings, profile, qr_scan, favorites, checkout
     val searchQuery = MutableStateFlow("")
     val isSearching = MutableStateFlow(false)
     
     // Favorites State
     val favoriteExperienceIds = MutableStateFlow<Set<Int>>(setOf(1, 2))
+    
+    // Pending checkout booking
+    val pendingCheckoutBooking = MutableStateFlow<Booking?>(null)
 
     fun toggleFavorite(experienceId: Int) {
         val current = favoriteExperienceIds.value
@@ -698,24 +701,29 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val trimmedEmail = email.trim()
 
+            var authResult: com.example.data.AuthResult? = null
             if (isSupabaseConfigured()) {
-                val authResult = supabaseService.signIn(trimmedEmail, passwordHash)
-                if (!authResult.success) {
-                    addSecurityLog("LOGIN_FAILURE", "Supabase authentication failed for $trimmedEmail: ${authResult.message}")
-                    onFailure(authResult.message)
+                val res = supabaseService.signIn(trimmedEmail, passwordHash)
+                if (!res.success) {
+                    addSecurityLog("LOGIN_FAILURE", "Supabase authentication failed for $trimmedEmail: ${res.message}")
+                    onFailure(res.message)
                     return@launch
                 }
+                authResult = res
             }
 
             val match = staff.value.firstOrNull { it.email.equals(trimmedEmail, ignoreCase = true) }
             
             if (match == null) {
-                if (isSupabaseConfigured()) {
+                if (isSupabaseConfigured() && authResult != null) {
                     // Automatically provision a local account on first login since Supabase authenticated successfully
+                    val nameFromMeta = authResult.userName?.ifEmpty { null }
+                        ?: trimmedEmail.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
+                    val phoneFromMeta = authResult.userPhone?.ifEmpty { null } ?: "+39 000 0000"
                     val newStaff = Staff(
-                        name = trimmedEmail.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() },
-                        role = "Guide",
-                        phoneNumber = "+39 000 0000",
+                        name = nameFromMeta,
+                        role = "User",
+                        phoneNumber = phoneFromMeta,
                         attendanceStatus = "Present",
                         rating = 5.0f,
                         performanceScore = 100,
@@ -805,7 +813,7 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
 
             var successMsg = "Operator enrolled successfully! Please login."
             if (isSupabaseConfigured()) {
-                val signUpResult = supabaseService.signUp(trimmedEmail, passwordHash)
+                val signUpResult = supabaseService.signUp(trimmedEmail, passwordHash, name, phone)
                 if (!signUpResult.success) {
                     onFailure(signUpResult.message)
                     return@launch
@@ -815,7 +823,7 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
 
             val newStaff = Staff(
                 name = name,
-                role = role,
+                role = "User",
                 phoneNumber = phone.ifEmpty { "+39 000 0000" },
                 attendanceStatus = "Present",
                 rating = 5.0f,
@@ -829,7 +837,7 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
             )
 
             repository.insertStaff(newStaff)
-            addSecurityLog("REGISTRATION", "New operator ${name} enrolled as ${role} (${trimmedEmail}).")
+            addSecurityLog("REGISTRATION", "New operator ${name} enrolled as User (${trimmedEmail}).")
             onSuccess(successMsg)
         }
     }
@@ -927,6 +935,10 @@ class DiamondsViewModel(application: Application) : AndroidViewModel(application
 
     fun isSupabaseConfigured(): Boolean {
         return supabaseService.isConfigured()
+    }
+
+    fun getResolvedSupabaseUrl(): String {
+        return supabaseService.getBaseUrl()
     }
 
     fun syncDataWithSupabase() {
