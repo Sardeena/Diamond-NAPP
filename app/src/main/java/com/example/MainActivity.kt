@@ -2344,6 +2344,7 @@ fun SwipeableBookingItem(
 @Composable
 fun DashboardScreen(viewModel: DiamondsViewModel) {
     val context = LocalContext.current
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val bookings by viewModel.bookings.collectAsStateWithLifecycle()
     val experiences by viewModel.experiences.collectAsStateWithLifecycle()
     val vehicles by viewModel.vehicles.collectAsStateWithLifecycle()
@@ -2374,6 +2375,11 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
     var assignedStaffId by remember { mutableStateOf(1) }
     var customPrice by remember { mutableStateOf("") }
     var specialRequests by remember { mutableStateOf("") }
+
+    // Quick Actions Modals states
+    var showNewBookingModal by remember { mutableStateOf(false) }
+    var showAddClientModal by remember { mutableStateOf(false) }
+    var showCheckFleetModal by remember { mutableStateOf(false) }
 
     var isLoading by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
@@ -2643,6 +2649,159 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // PREMIUM QUICK ACTIONS ROW
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Text(
+                    "QUICK OPERATOR ACTIONS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted,
+                    letterSpacing = 1.5.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // New Booking action card
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, SurfaceGlassElevated),
+                        modifier = Modifier
+                            .weight(1.5f)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                showNewBookingModal = true
+                            }
+                            .testTag("action_new_booking")
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(GoldPremium.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "New Booking",
+                                    tint = GoldPremium,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "New Booking",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+
+                    // Add Client action card
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, SurfaceGlassElevated),
+                        modifier = Modifier
+                            .weight(1.5f)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                showAddClientModal = true
+                            }
+                            .testTag("action_add_client")
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(GoldPremium.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PersonAdd,
+                                    contentDescription = "Add Client",
+                                    tint = GoldPremium,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Add Client",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+
+                    // Check Fleet action card
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, SurfaceGlassElevated),
+                        modifier = Modifier
+                            .weight(1.5f)
+                            .clickable {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                showCheckFleetModal = true
+                            }
+                            .testTag("action_check_fleet")
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(GoldPremium.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DirectionsBoat,
+                                    contentDescription = "Check Fleet",
+                                    tint = GoldPremium,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Fleet Status",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         item {
@@ -3629,6 +3788,209 @@ fun DashboardScreen(viewModel: DiamondsViewModel) {
             customer = customer,
             onDismiss = { selectedBookingForDetails = null }
         )
+    }
+
+    if (showNewBookingModal) {
+        AddBookingSheet(
+            viewModel = viewModel,
+            onDismiss = { showNewBookingModal = false }
+        )
+    }
+
+    if (showAddClientModal) {
+        AddCustomerDialog(
+            viewModel = viewModel,
+            onDismiss = { showAddClientModal = false }
+        )
+    }
+
+    if (showCheckFleetModal) {
+        CheckFleetStatusDialog(
+            viewModel = viewModel,
+            onDismiss = { showCheckFleetModal = false }
+        )
+    }
+}
+
+@Composable
+fun CheckFleetStatusDialog(viewModel: DiamondsViewModel, onDismiss: () -> Unit) {
+    val vehicles by viewModel.vehicles.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SurfaceGlassElevated),
+            shape = RoundedCornerShape(24.dp),
+            border = BorderStroke(1.dp, GoldPremium.copy(alpha = 0.3f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .heightIn(max = 500.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "FLEET STATUS CENTRE",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = GoldPremium,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = GoldPremium)
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    items(vehicles) { vehicle ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceGlass),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, SurfaceGlassElevated),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.DirectionsBoat,
+                                            contentDescription = "Boat",
+                                            tint = GoldPremium,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                vehicle.name,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = TextPrimary
+                                            )
+                                            Text(
+                                                "ID: ${vehicle.licensePlate} • Cap: ${vehicle.capacity}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = TextSecondary
+                                            )
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(
+                                                when (vehicle.status) {
+                                                    "Available" -> StatusLiveGreen.copy(alpha = 0.2f)
+                                                    "Active" -> StatusPaidBlue.copy(alpha = 0.2f)
+                                                    else -> StatusAlertAmber.copy(alpha = 0.2f)
+                                                }
+                                            )
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            vehicle.status,
+                                            color = when (vehicle.status) {
+                                                "Available" -> StatusLiveGreen
+                                                "Active" -> StatusPaidBlue
+                                                else -> StatusAlertAmber
+                                            },
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Fuel level
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "Fuel Level: ${vehicle.fuelLevel}%",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextSecondary
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            Toast.makeText(context, "${vehicle.name} Refueled to 100%", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.LocalGasStation,
+                                            contentDescription = "Refuel",
+                                            tint = GoldPremium,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                                LinearProgressIndicator(
+                                    progress = { vehicle.fuelLevel / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = if (vehicle.fuelLevel > 50) GoldPremium else StatusAlertAmber,
+                                    trackColor = SurfaceGlassElevated
+                                )
+
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.updateVehicleStatus(vehicle, "Available")
+                                            Toast.makeText(context, "${vehicle.name} marked Available", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Set Available", color = StatusLiveGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            viewModel.updateVehicleStatus(vehicle, "Maintenance")
+                                            Toast.makeText(context, "${vehicle.name} in Maintenance", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Set Service", color = StatusAlertAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = GoldPremium, contentColor = SlateDarkBg),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Done", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
 
